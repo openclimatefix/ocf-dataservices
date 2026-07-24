@@ -1,0 +1,20 @@
+[project]
+name = "dynamical-data"
+version = "0.1.0"
+description = "Download & process NWPs from Dynamical.org"
+readme = "README.md"
+authors = [
+    { name = "Sol Cotton", email = "sol@openclimatefix.org" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "dynamical-catalog>=0.5.0",
+    "xarray>=2026.1.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = []

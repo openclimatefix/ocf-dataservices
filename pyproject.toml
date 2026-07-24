@@ -1,111 +1,89 @@
 # --- PROJECT CONFIGURATION --- #
 
-[build-system]
-requires = ["setuptools>=69", "wheel", "setuptools-git-versioning>=2.0,<3"]
-build-backend = "setuptools.build_meta"
-
 # Metadata (see https://peps.python.org/pep-0621/)
 [project]
-name = "dags"
-dynamic = ["version"] # Set automtically using git: https://setuptools-git-versioning.readthedocs.io/en/stable/
-description = "Dags for running jobs via Dagster on Leonardo"
+name = "ocf-dataservices"
+version = "0.1.0"
+description = "Pipelines for the ingestion and conversion of data relevant to OCF's workloads."
 readme = {file = "README.md", content-type = "text/markdown"}
-requires-python = ">=3.11.0"
+requires-python = ">=3.14"
 license = {text = "MIT License"}
 authors = [
-    { name = "Sol Cotton", email = "sol@openclimatefix.org"},
-    { name = "Jacob Bieker", email = "jacob@openclimatefix.org"},
+    { name = "Open Climate Fix Team", email = "info@openclimatefix.org"}
 ]
-classifiers = ["Programming Language :: Python :: 3"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
 dependencies = [
-    "cdsapi >= 0.6.1",
-    "dagster >= 1.8.5",
-    "dagster-postgres >= 0.24.5",
-    "dagster-docker >= 0.24.5",
-    "dagster-pipes >= 1.8.5",
-    "huggingface-hub >= 0.19.4",
-    "numpy >= 1.26.0",
-    "pandas >= 2.2.3",
-    "pyarrow >= 10.0.1",
-    "requests >= 2.31.0",
-    "requests-toolbelt >= 1.0.0",
+    "dagster>=1.12.11",
+    "dagster-aws>=0.28.11",
+    "dagster-postgres>=0.28.11",
+    "dagster-webserver>=1.12.11",
+    "icechunk>=2.1.1",
+    "requests>=2.31.0",
+    "sentry-sdk>=2.66,<3",
+    "ecmwfmars-data",
+    "dynamical-data",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    # Testing
-    "pytest",
-    "unittest-xml-reporting",
-    "dagit",
-    # Linting
-    "ruff>=0.9.2",
-    "types-pyyaml",
-    "types-pytz",
-    "types-requests",
-    # LSP support
-    "python-lsp-server",
-    "pylsp-mypy",
-    "python-lsp-ruff",
+    "dagster-dg-cli",
+    "ruff>=0.14.13",
+    "ty>=0.0.16",
+    "unittest-xml-reporting>=4.0.0",
+    "moto[server]>=5.0.0",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
-exclude = ["*_tests"]
+[project.urls]
+repository = "https://github.com/openclimatefix/ocf-dataservices"
 
-[tool.setuptools-git-versioning]
-enabled = true
+# --- UV WORKSPACE CONFIG ---
+# See: https://docs.astral.sh/uv/concepts/projects/workspaces
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+ecmwfmars-data = { workspace = true }
+dynamical-data = { workspace = true }
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ocf_dataservices"]
+
+# --- DAGSTER ---
+
+[tool.dagster]
+module_name = "ocf_dataservices.definitions"
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "ocf_dataservices"
+registry_modules = [
+    "ocf_dataservices.components.*",
+]
+
+# --- LINTING AND TYPING CONFIGURATION --- #
 
 # Ruff configuration
-# * See https://beta.ruff.rs/docs/
+# See https://docs.astral.sh/ruff/configuration/
 [tool.ruff]
 line-length = 100
-indent-width = 4
-# Use pydocstyle Google convention
-# See https://www.pydocstyle.org/en/stable/error_codes.html
-exclude = ["__init__.py"]
 
-[tool.ruff.lint]
-select = [
-    "F",   # pyflakes
-    "E",   # pycodestyle
-    "W",   # whitespace and newlines
-    "I",   # isort
-    "UP",  # modernize
-    "ANN", # flake8 type annotations
-    "S",   # flake8 bandit
-    "B",   # flake8 bugbear
-    "C4",  # flake8 comprehensions
-    "COM", # flake8 commas
-    "T20", # flake8 print
-    "SIM", # flake8 simplify
-    "ARG", # flake8 unused arguments
-    "DTZ", # flake8 datetimes
-    "Q",   # flake8 quotes
-    "TCH", # flake8 typecheck
-    "D",   # pydocstyle
-    "RUF", # ruff-specific rules
-]
-fixable = ["ALL"]
-ignore = [
-    "D203", "D213", "D215", "D400", "D401", "D404", "D406",
-    "D407", "D408", "D409", "D413", "C420",
-]
-per-file-ignores = {"test*" = ["D", "ANN"]}
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
 line-ending = "auto"
-
-# MyPy configuration
-# * See https://mypy.readthedocs.io/en/stable/index.html
-[tool.mypy]
-python_version = "3.12"
-warn_return_any = true
-disallow_untyped_defs = true
-ignore_missing_imports = true
-plugins = [
-    'numpy.typing.mypy_plugin'
-]
-explicit_package_bases = true
-
+docstring-code-format = true
+docstring-code-line-length = 100
