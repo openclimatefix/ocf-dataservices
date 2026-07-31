@@ -1,12 +1,11 @@
 import dagster as dg
 
-from ocf_dataservices.resources.iomanager_xarray_icechunk import (
-    XarrayIcechunkIOManager,
-)
 from ocf_dataservices.defs.assets import (
     ecmwf_ens_uk,
 )
-
+from ocf_dataservices.resources.iomanager_xarray_icechunk import (
+    XarrayIcechunkIOManager,
+)
 
 local_resources = {
     "io_manager": XarrayIcechunkIOManager(

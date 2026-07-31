@@ -1,15 +1,11 @@
-import re
-import numpy as np
-
-import icechunk
-import xarray as xr
-import zarr.codecs
-
 import datetime as dt
-from typing import Union
+import re
+
 import dagster as dg
 import icechunk
+import numpy as np
 import xarray as xr
+import zarr.codecs
 
 
 class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
@@ -53,9 +49,9 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
                 repo = icechunk.Repository.create(storage)
                 created = True
             except Exception as e:
-                raise IOError(f"Failed to create repository at storage: {storage}. Error: {e}")
+                raise OSError(f"Failed to create repository at storage: {storage}. Error: {e}")
         else:
-            raise IOError(f"Repository does not exist at storage: {storage}")
+            raise OSError(f"Repository does not exist at storage: {storage}")
         return repo, created
 
     def existing_partition(
@@ -68,7 +64,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
         store_path = self._get_store_path(asset_key)
         try:
             repo = self._get_repo(store_path)
-        except IOError:
+        except OSError:
             # The repo doesn't exist, so the partition can't exist either
             return None
 
