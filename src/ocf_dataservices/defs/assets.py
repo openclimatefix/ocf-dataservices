@@ -1,13 +1,9 @@
+import datetime as dt
+from typing import Final
+
 import dagster as dg
 import xarray as xr
-import datetime as dt
-from typing import Final, TypedDict
-
-from dynamical_data.ecmwf_ens.download import (
-    NwpRunNotYetAvailable,
-    download,
-    open_it
-)
+from dynamical_data.ecmwf_ens.download import NwpRunNotYetAvailable, download, open_it
 
 ecmwf_ens_partitions = dg.DailyPartitionsDefinition(
     start_date="2024-04-01", timezone="UTC", end_offset=1
@@ -33,8 +29,8 @@ _ECMWF_ENS_RETRY_DELAY_SECONDS: Final[int] = 1800
     pool="ECMWF",
     metadata={
         "append_dim": "init_time",
-        "chunks": {"init_time": 1, "step": 1, "longitude": 14, "latitude": 15},
-        "shards": {"init_time": 1, "step": -1, "longitude": -1, "latitude": -1},
+        "chunks": {"init_time": 1, "step": 1, "ensemble_member": 1, "latitude": 15, "longitude": 14},
+        "shards": {"init_time": 1, "step": -1, "ensemble_member": -1, "latitude": -1, "longitude": -1},
         "bbox_nwse": [62, -12, 48, 3],
     },
 )

@@ -1,5 +1,5 @@
 import concurrent.futures
-from datetime import datetime, timezone
+import datetime as dt
 from typing import Final, Literal, cast
 
 import dynamical_catalog
@@ -28,7 +28,7 @@ _ECMWF_ENS_VARS_TO_DOWNLOAD: Final[tuple[str, ...]] = (
 
 
 def open_it(
-    nwp_init_time: datetime,
+    nwp_init_time: dt.datetime,
     bbox_nwse: tuple[float, float, float, float] = (90, 180, -90, -180)
 ) -> xr.Dataset:
     """Lazily open the ECMWF ENS Icechunk store for a given init time.
@@ -46,7 +46,7 @@ def open_it(
         raise ValueError(f"nwp_init_time must be timezone aware. {nwp_init_time.tzinfo=}")
 
     # We need to make nwp_init_time tz-naive for the xarray selection.
-    utc_nwp_init_time = np.datetime64(nwp_init_time.astimezone(timezone.utc).replace(tzinfo=None))
+    utc_nwp_init_time = np.datetime64(nwp_init_time.astimezone(dt.UTC).replace(tzinfo=None))
 
     ds = dynamical_catalog.open("ecmwf-ifs-ens-forecast-15-day-0-25-degree", chunks=None)
 
@@ -71,7 +71,7 @@ def open_it(
 
     # NOTE: This will fail if the region crosses the anti-meridian. But we do not anticipate
     # forecasting near the anti-meridian.
-    ds_sliced = ds.sel(latitude=lat_slice, longitude=lon_slice, init_time=utc_nwp_init_time)
+    ds_sliced = ds.sel(latitude=lat_slice, longitude=lon_slice, init_time=[utc_nwp_init_time])
 
     # Explicitly check for an empty spatial intersection after slicing.
     # This prevents downstream KeyErrors during DataFrame conversion.
@@ -84,9 +84,8 @@ def open_it(
             f"{ds_sliced=}"
         )
 
-    # TODO: Ensure dimensions match expected OCF dimensions of
-    # (init_time, step, ensemble_member, latitude, longitude).
-    # Currently sliced dataset has dimensions (ensemble_member, latitude, lead_time, longitude)
+    ds_sliced = ds_sliced.rename({"lead_time": "step"})
+    ds_sliced = ds_sliced.transpose("init_time", "step", "ensemble_member", "latitude", "longitude")
 
     return ds_sliced
 
@@ -121,7 +120,7 @@ def download(ds_sliced: xr.Dataset) -> xr.Dataset:
     data_arrays: dict[str, xr.DataArray] = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         futures = [
-            executor.submit(download_array, str(name)) for name in ds_sliced.data_vars.keys()
+            executor.submit(download_array, str(name)) for name in ds_sliced.data_vars
         ]
         for future in concurrent.futures.as_completed(futures):
             data_arrays.update(future.result())
