@@ -25,6 +25,8 @@ dependencies = [
     "sentry-sdk>=2.66,<3",
     "ecmwfmars-data",
     "dynamical-data",
+    "pandera>=0.32.1",
+    "xarray>=2026.7.0",
 ]
 
 [build-system]
