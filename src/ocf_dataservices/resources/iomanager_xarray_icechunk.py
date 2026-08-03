@@ -14,6 +14,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
     aws_secret_access_key: str = ""
     aws_region_name: str = ""
     aws_endpoint_url: str | None = None
+    keep_mantissa_bits: int | None = 14
 
     def _get_store_path(self, asset_key: dg.AssetKey) -> str:
         return "/".join([self.path] + list(asset_key.path))
@@ -97,11 +98,40 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
                     f"{list(metadata[key].keys())}"
                 )
 
+        keep_bits = metadata.get("keep_mantissa_bits", self.keep_mantissa_bits)
+        if keep_bits is not None:
+            mask = np.int32(~((1 << (23 - keep_bits)) - 1))
+
+            def apply_veltkamp(da: xr.DataArray) -> xr.DataArray:
+                if da.dtype == np.float32:
+                    if hasattr(da.data, "map_blocks"):
+                        # Support Dask-backed datasets without computing them into memory
+                        new_data = da.data.map_blocks(
+                            lambda x: (x.view(np.int32) & mask).view(np.float32), 
+                            dtype=np.float32
+                        )
+                    else:
+                        # In-memory NumPy datasets
+                        new_data = (da.values.view(np.int32) & mask).view(np.float32)
+                    return da.copy(data=new_data)
+                return da
+
+            obj = obj.map(apply_veltkamp, keep_attrs=True)
+
         store_path = self._get_store_path(context.asset_key)
-        repo, was_created = self._get_repo(store_path, create_if_not_exists=True)
+        repo, _was_created = self._get_repo(store_path, create_if_not_exists=True)
         session = repo.writable_session(branch="main")
 
-        if context.has_partition_key and not was_created:
+        dataset_exists = False
+        try:
+            # Check if a valid zarr dataset actually exists in the store.
+            # (An icechunk repo might exist without a zarr dataset inside it if a previous run failed).
+            xr.open_zarr(session.store, consolidated=False)
+            dataset_exists = True
+        except Exception:
+            dataset_exists = False
+
+        if context.has_partition_key and dataset_exists:
             obj.to_zarr(
                 session.store,
                 mode="a",

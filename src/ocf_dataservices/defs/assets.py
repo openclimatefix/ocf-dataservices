@@ -4,6 +4,7 @@ from typing import Final
 import dagster as dg
 import xarray as xr
 from dynamical_data.ecmwf_ens.download import NwpRunNotYetAvailable, download, open_it
+from dynamical_data.ecmwf_ens.schema import EcmwfEnsSchema
 
 ecmwf_ens_partitions = dg.DailyPartitionsDefinition(
     start_date="2024-04-01", timezone="UTC", end_offset=1
@@ -29,8 +30,8 @@ _ECMWF_ENS_RETRY_DELAY_SECONDS: Final[int] = 1800
     pool="ECMWF",
     metadata={
         "append_dim": "init_time",
-        "chunks": {"init_time": 1, "step": 1, "ensemble_member": 1, "latitude": 15, "longitude": 14},
-        "shards": {"init_time": 1, "step": -1, "ensemble_member": -1, "latitude": -1, "longitude": -1},
+        "chunks": EcmwfEnsSchema._chunks,
+        "shards": EcmwfEnsSchema._shards,
         "bbox_nwse": [62, -12, 48, 3],
     },
 )
@@ -62,7 +63,7 @@ def ecmwf_ens_uk(context: dg.AssetExecutionContext) -> xr.Dataset:
     context.log.info("Lazily opened Icechunk store.")
 
     ds: xr.Dataset = download(ds_lazy)
-    context.log.info("Downloaded Icechunk data.")
+    context.log.info("Downloaded and validated Icechunk data.")
 
     return ds
 
