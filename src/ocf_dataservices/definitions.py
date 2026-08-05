@@ -1,7 +1,7 @@
 import dagster as dg
 
 from ocf_dataservices.defs.assets import (
-    ecmwf_ens_uk,
+    ecmwf_ens_uk_dynamical_0p25deg,
 )
 from ocf_dataservices.resources.iomanager_xarray_icechunk import (
     XarrayIcechunkIOManager,
@@ -14,6 +14,6 @@ local_resources = {
 }
 
 defs = dg.Definitions(
-    assets=[ecmwf_ens_uk],
+    assets=[ecmwf_ens_uk_dynamical_0p25deg],
     resources=local_resources,
 )

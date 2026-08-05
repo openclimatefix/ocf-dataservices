@@ -23,6 +23,8 @@ _ECMWF_ENS_RETRY_DELAY_SECONDS: Final[int] = 1800
 
 @dg.asset(
     partitions_def=ecmwf_ens_partitions,
+    key=dg.AssetKey(["nwp", "ecmwf_ens_uk_dynamical_0p25deg"]),
+    group_name="L1",
     # The `pool="ECMWF"` works in conjunction with the Dagster instance configuration
     # (e.g., in `dagster.yaml`) to limit the number of times this asset can be run
     # concurrently. This is crucial because downloading ECMWF data is memory-intensive.
@@ -35,7 +37,7 @@ _ECMWF_ENS_RETRY_DELAY_SECONDS: Final[int] = 1800
         "bbox_nwse": [62, -12, 48, 3],
     },
 )
-def ecmwf_ens_uk(context: dg.AssetExecutionContext) -> xr.Dataset:
+def ecmwf_ens_uk_dynamical_0p25deg(context: dg.AssetExecutionContext) -> xr.Dataset:
     """
     Downloads and processes ECMWF ensemble NWP data for a specific day.
     """

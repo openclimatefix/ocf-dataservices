@@ -21,10 +21,14 @@ class EcmwfEnsSchema(pa.DatasetModel):
     step: Coordinate[np.timedelta64] = pa.Field(
         dims=("step",),
         nullable=False,
+        ge=0,
+        le=85,
     )
     ensemble_member: Coordinate[np.int16] = pa.Field(
         dims=("ensemble_member",),
         nullable=False,
+        ge=1,
+        le=51,
     )
     longitude: Coordinate[np.float64] = pa.Field(
         dims=("longitude",),
@@ -66,34 +70,50 @@ class EcmwfEnsSchema(pa.DatasetModel):
     )
     pressure_reduced_to_mean_sea_level: np.float32 = pa.Field(
         dims=_dims,
+        ge=80000, # Pa
+        le=115000,
         nullable=False,
     )
     total_cloud_cover_atmosphere: np.float32 = pa.Field(
         dims=_dims,
+        ge=0, # percent
+        le=100,
         nullable=False,
     )
     downward_long_wave_radiation_flux_surface: np.float32 = pa.Field(
         dims=_dims,
+        ge=0, # W m-2
+        le=2000,
         nullable=True,
     )
     downward_short_wave_radiation_flux_surface: np.float32 = pa.Field(
         dims=_dims,
+        ge=0, # W m-2
+        le=2000,
         nullable=True,
     )
     precipitation_surface: np.float32 = pa.Field(
         dims=_dims,
+        ge=0, # kg m-2 s-1
+        le=1,
         nullable=True,
     )
     categorical_precipitation_type_surface: np.float32 = pa.Field(
         dims=_dims,
+        ge=0,
+        le=255,
         nullable=True,
     )
     wind_v_10m: np.float32 = pa.Field(
         dims=_dims,
+        ge=-115, # m/s
+        le=115,
         nullable=True,
     )
     wind_u_10m: np.float32 = pa.Field(
         dims=_dims,
+        ge=-115, # m/s
+        le=115,
         nullable=True,
     )
 
@@ -109,4 +129,6 @@ class EcmwfEnsSchema(pa.DatasetModel):
         return float(da.isnull().mean()) < 0.02
 
     class Config:
-        strict = True
+        strict = "filter" # Drops unlisted variables
+        strict_coords = "filter" # Drops unlisted coordinates
+        chunked=True # Ensures the dataset is chunked
