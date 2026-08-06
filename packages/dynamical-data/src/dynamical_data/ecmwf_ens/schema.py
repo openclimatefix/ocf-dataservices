@@ -5,6 +5,21 @@ import pandera.xarray as pa
 import xarray as xr
 from pandera import check
 from pandera.typing.xarray import Coordinate
+from schemas.nwp_coordinates import ensemble_member, init_time, latitude, longitude, step
+from schemas.nwp_variables import (
+    categorical_precipitation_type_surface,
+    dew_point_temperature_2m,
+    downward_long_wave_radiation_flux_surface,
+    downward_short_wave_radiation_flux_surface,
+    precipitation_surface,
+    pressure_reduced_to_mean_sea_level,
+    temperature_2m,
+    total_cloud_cover_atmosphere,
+    wind_u_10m,
+    wind_u_100m,
+    wind_v_10m,
+    wind_v_100m,
+)
 
 
 class EcmwfEnsSchema(pa.DatasetModel):
@@ -14,108 +29,25 @@ class EcmwfEnsSchema(pa.DatasetModel):
     _dims = ("init_time", "step", "ensemble_member", "latitude", "longitude")
 
     # Dimensions
-    init_time: Coordinate[np.datetime64] = pa.Field(
-        dims=("init_time",),
-        nullable=False,
-    )
-    step: Coordinate[np.timedelta64] = pa.Field(
-        dims=("step",),
-        nullable=False,
-        ge=0,
-        le=85,
-    )
-    ensemble_member: Coordinate[np.int16] = pa.Field(
-        dims=("ensemble_member",),
-        nullable=False,
-        ge=1,
-        le=51,
-    )
-    longitude: Coordinate[np.float64] = pa.Field(
-        dims=("longitude",),
-        nullable=False,
-        ge=-180,
-        le=180,
-    )
-    latitude: Coordinate[np.float64] = pa.Field(
-        dims=("latitude",),
-        nullable=False,
-        ge=-90,
-        le=90,
-    )
+    init_time: Coordinate[np.datetime64] = init_time()
+    step: Coordinate[np.timedelta64] = step(ge_hours=0, le_hours=85)
+    ensemble_member: Coordinate[np.int16] = ensemble_member(ge=1, le=51)
+    longitude: Coordinate[np.float64] = longitude(ge=-180, le=180)
+    latitude: Coordinate[np.float64] = latitude(ge=-90, le=90)
 
     # Variables
-    temperature_2m: np.float32 = pa.Field(
-        dims=_dims,
-        ge=-100, # degrees Celsius
-        le=100,
-        nullable=False,
-    )
-    dew_point_temperature_2m: np.float32 = pa.Field(
-        dims=_dims,
-        ge=-100, # degrees Celsius
-        le=100,
-        nullable=False,
-    )
-    wind_u_100m: np.float32 = pa.Field(
-        dims=_dims,
-        ge=-115, # m/s
-        le=115,
-        nullable=False,
-    )
-    wind_v_100m: np.float32 = pa.Field(
-        dims=_dims,
-        ge=-115, # m/s
-        le=115,
-        nullable=False,
-    )
-    pressure_reduced_to_mean_sea_level: np.float32 = pa.Field(
-        dims=_dims,
-        ge=80000, # Pa
-        le=115000,
-        nullable=False,
-    )
-    total_cloud_cover_atmosphere: np.float32 = pa.Field(
-        dims=_dims,
-        ge=0, # percent
-        le=100,
-        nullable=False,
-    )
-    downward_long_wave_radiation_flux_surface: np.float32 = pa.Field(
-        dims=_dims,
-        ge=0, # W m-2
-        le=2000,
-        nullable=True,
-    )
-    downward_short_wave_radiation_flux_surface: np.float32 = pa.Field(
-        dims=_dims,
-        ge=0, # W m-2
-        le=2000,
-        nullable=True,
-    )
-    precipitation_surface: np.float32 = pa.Field(
-        dims=_dims,
-        ge=0, # kg m-2 s-1
-        le=1,
-        nullable=True,
-    )
-    categorical_precipitation_type_surface: np.float32 = pa.Field(
-        dims=_dims,
-        ge=0,
-        le=255,
-        nullable=True,
-    )
-    wind_v_10m: np.float32 = pa.Field(
-        dims=_dims,
-        ge=-115, # m/s
-        le=115,
-        nullable=True,
-    )
-    wind_u_10m: np.float32 = pa.Field(
-        dims=_dims,
-        ge=-115, # m/s
-        le=115,
-        nullable=True,
-    )
+    temperature_2m: np.float32 = temperature_2m(dims=_dims, nullable=False)
+    dew_point_temperature_2m: np.float32 = dew_point_temperature_2m(dims=_dims, nullable=False)
+    wind_u_100m: np.float32 = wind_u_100m(dims=_dims, nullable=False)
+    wind_v_100m: np.float32 = wind_v_100m(dims=_dims, nullable=False)
+    pressure_reduced_to_mean_sea_level: np.float32 = pressure_reduced_to_mean_sea_level(dims=_dims, nullable=False)
+    total_cloud_cover_atmosphere: np.float32 = total_cloud_cover_atmosphere(dims=_dims, nullable=False)
+    downward_long_wave_radiation_flux_surface: np.float32 = downward_long_wave_radiation_flux_surface(dims=_dims, nullable=True)
+    downward_short_wave_radiation_flux_surface: np.float32 = downward_short_wave_radiation_flux_surface(dims=_dims, nullable=True)
+    precipitation_surface: np.float32 = precipitation_surface(dims=_dims, nullable=True)
+    categorical_precipitation_type_surface: np.float32 = categorical_precipitation_type_surface(dims=_dims, nullable=True)
+    wind_v_10m: np.float32 = wind_v_10m(dims=_dims, nullable=True)
+    wind_u_10m: np.float32 = wind_u_10m(dims=_dims, nullable=True)
 
     @check(
         "downward_long_wave_radiation_flux_surface",
@@ -131,4 +63,4 @@ class EcmwfEnsSchema(pa.DatasetModel):
     class Config:
         strict = "filter" # Drops unlisted variables
         strict_coords = "filter" # Drops unlisted coordinates
-        chunked=True # Ensures the dataset is chunked
+        chunked = True # Ensures the dataset is chunked

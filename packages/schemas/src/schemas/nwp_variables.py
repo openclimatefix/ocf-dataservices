@@ -1,0 +1,49 @@
+from typing import Any
+
+import pandera.xarray as pa
+
+
+def temperature_2m(dims: tuple[str, ...], nullable: bool = False) -> Any:
+    return pa.Field(dims=dims, ge=-100, le=100, nullable=nullable)
+
+def dew_point_temperature_2m(dims: tuple[str, ...], nullable: bool = False) -> Any:
+    return pa.Field(dims=dims, ge=-100, le=100, nullable=nullable)
+
+def wind_u_100m(dims: tuple[str, ...], nullable: bool = False) -> Any:
+    return pa.Field(dims=dims, ge=-115, le=115, nullable=nullable)
+
+def wind_v_100m(dims: tuple[str, ...], nullable: bool = False) -> Any:
+    return pa.Field(dims=dims, ge=-115, le=115, nullable=nullable)
+
+def pressure_reduced_to_mean_sea_level(dims: tuple[str, ...], nullable: bool = False) -> Any:
+    return pa.Field(dims=dims, ge=80000, le=115000, nullable=nullable)
+
+def total_cloud_cover_atmosphere(dims: tuple[str, ...], nullable: bool = False) -> Any:
+    return pa.Field(dims=dims, ge=0, le=100, nullable=nullable)
+
+def downward_long_wave_radiation_flux_surface(dims: tuple[str, ...], nullable: bool = True) -> Any:
+    return pa.Field(dims=dims, ge=0, le=2000, nullable=nullable)
+
+def downward_short_wave_radiation_flux_surface(dims: tuple[str, ...], nullable: bool = True) -> Any:
+    return pa.Field(dims=dims, ge=0, le=2000, nullable=nullable)
+
+def precipitation_surface(dims: tuple[str, ...], nullable: bool = True) -> Any:
+    return pa.Field(dims=dims, ge=0, le=1, nullable=nullable)
+
+def categorical_precipitation_type_surface(dims: tuple[str, ...], nullable: bool = True) -> Any:
+    return pa.Field(dims=dims, ge=0, le=255, nullable=nullable)
+
+def wind_v_10m(dims: tuple[str, ...], nullable: bool = True) -> Any:
+    return pa.Field(dims=dims, ge=-115, le=115, nullable=nullable)
+
+def wind_u_10m(dims: tuple[str, ...], nullable: bool = True) -> Any:
+    return pa.Field(dims=dims, ge=-115, le=115, nullable=nullable)
+
+def high_cloud_cover(dims: tuple[str, ...], nullable: bool = False) -> Any:
+    return pa.Field(dims=dims, ge=0, le=100, nullable=nullable)
+
+def medium_cloud_cover(dims: tuple[str, ...], nullable: bool = False) -> Any:
+    return pa.Field(dims=dims, ge=0, le=100, nullable=nullable)
+
+def low_cloud_cover(dims: tuple[str, ...], nullable: bool = False) -> Any:
+    return pa.Field(dims=dims, ge=0, le=100, nullable=nullable)

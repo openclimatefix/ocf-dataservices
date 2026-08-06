@@ -172,13 +172,17 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
                 }
             )
 
-        session.commit(f"dagster materialization: {context.asset_key} at {dt.datetime.now(dt.UTC)}")
+        commit_hash = session.commit(f"dagster materialization: {context.asset_key} at {dt.datetime.now(dt.UTC)}")
 
+        size_bytes = obj.nbytes
         context.add_output_metadata({
             "store_path": store_path,
             "partition_key": context.partition_key if context.has_partition_key else "N/A",
             "data_vars": list(obj.data_vars),
             "dims": dict(obj.dims),
+            "icechunk_commit": dg.MetadataValue.text(str(commit_hash)),
+            "size_in_memory_bytes": dg.MetadataValue.int(size_bytes),
+            "size_human_readable": dg.MetadataValue.text(f"{size_bytes / (1024 * 1024):.2f} MB"),
         })
 
     def load_input(self, context: dg.InputContext) -> xr.Dataset:
