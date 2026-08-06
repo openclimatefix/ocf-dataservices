@@ -25,6 +25,7 @@ dependencies = [
     "sentry-sdk>=2.66,<3",
     "ecmwfmars-data",
     "dynamical-data",
+    "schemas",
     "pandera>=0.32.1",
     "xarray>=2026.7.0",
 ]
@@ -54,6 +55,7 @@ members = ["packages/*"]
 [tool.uv.sources]
 ecmwfmars-data = { workspace = true }
 dynamical-data = { workspace = true }
+schemas = { workspace = true }
 
 
 [tool.hatch.build.targets.wheel]

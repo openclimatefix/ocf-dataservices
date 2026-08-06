@@ -10,6 +10,8 @@ requires-python = ">=3.14"
 dependencies = [
     "cfgrib>=0.9.15",
     "xarray>=2026.1.0",
+    "ecmwf-api-client>=1.7.0",
+    "pandera[xarray]>=0.32.1",
 ]
 
 [build-system]
