@@ -100,19 +100,27 @@ def convert_to_dataset(grib_path: Path | str) -> Annotated[xr.Dataset, EcmwfEnsS
     if "temperature_2m" in ds.data_vars:
         ds["temperature_2m"] = ds["temperature_2m"] - 273.15
 
-    # Radiation: J m-2 (accumulated over 3h) to W m-2
-    # NOTE: ECMWF MARS radiation steps are accumulated since the start of the forecast.
-    # However, depending on the MARS request stream (e.g., enfo), they might be accumulated 
-    # since the previous output step. Assuming 3 hours here per the prompt, though 
-    # rigorous step differencing might be needed depending on the exact steps requested.
-    # For now we apply the standard conversion factor as outlined in the plan.
+    # Radiation: J m-2 (accumulated over time) to W m-2
+    # ECMWF MARS radiation steps are accumulated since the start of the forecast.
+    # We apply a forward difference to extract the accumulation over each step interval,
+    # then divide by the interval duration in seconds to convert J m-2 to W m-2.
     if "downward_short_wave_radiation_flux_surface" in ds.data_vars:
+        rad_var = "downward_short_wave_radiation_flux_surface"
+        
+        # Duration of each step interval in seconds (step[i+1] - step[i])
+        dt = (ds.step.shift(step=-1) - ds.step).dt.total_seconds()
+        
+        # Forward difference: Accumulation(T+dt) - Accumulation(T)
+        diff_var = ds[rad_var].shift(step=-1) - ds[rad_var]
+        
+        # Convert J m-2 to W m-2
+        flux = diff_var / dt
+        
         # Prevent negative values due to spectral ringing
-        ds["downward_short_wave_radiation_flux_surface"] = np.clip(
-            ds["downward_short_wave_radiation_flux_surface"] / 10800, 
-            a_min=0, 
-            a_max=None
-        )
+        ds[rad_var] = np.clip(flux, a_min=0, a_max=None)
+        
+        # Drop the last step since its forward difference is NaN
+        ds = ds.isel(step=slice(0, -1))
 
     # Cloud covers: 0-1 fraction to percentage
     for cloud_var in ["high_cloud_cover", "medium_cloud_cover", "low_cloud_cover"]:

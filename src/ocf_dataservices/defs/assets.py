@@ -15,7 +15,7 @@ from ocf_dataservices.resources.mars import DagsterMarsClient
 
 ecmwf_ens_partitions = dg.TimeWindowPartitionsDefinition(
     cron_schedule="0 0,6,12,18 * * *",
-    start="2024-04-01 00:00",
+    start="2024-04-01T00:00",
     timezone="UTC",
     fmt="%Y-%m-%dT%H:%M",
     end_offset=2, # Delay keys by 2 intervals (~12 hours) to match availability lag
