@@ -176,7 +176,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
 
         size_bytes = obj.nbytes
         context.add_output_metadata({
-            "store_path": store_path,
+            "store_path": dg.MetadataValue.path(store_path),
             "partition_key": context.partition_key if context.has_partition_key else "N/A",
             "data_vars": list(obj.data_vars),
             "dims": dict(obj.dims),

@@ -1,4 +1,12 @@
 import dagster as dg
+from ocf_dataservices.defs.ecmwf_live import (
+        ecmwf_live_s3_sensor,
+        l0_ecmwf_live_local,
+        l0_ecmwf_live_s3,
+        l1_ecmwf_live_india,
+        l1_ecmwf_live_nl,
+        l1_ecmwf_live_uk,
+)
 
 from ocf_dataservices.defs.assets import (
         l0_mars_ecmwf_ens_uk_v1,
@@ -40,6 +48,14 @@ defs = dg.Definitions(
         l0_mars_ecmwf_ens_uk_v1,
         l1_mars_ecmwf_ens_uk_v1,
         l1_dynamical_ecmwf_ens_uk_v1,
+        l0_ecmwf_live_s3,
+        l0_ecmwf_live_local,
+        l1_ecmwf_live_uk,
+        l1_ecmwf_live_india,
+        l1_ecmwf_live_nl,
+    ],
+    sensors=[
+        ecmwf_live_s3_sensor,
     ],
     resources=local_resources,
 )

@@ -60,7 +60,7 @@ class TestDownload(unittest.TestCase):
             # Create dummy coordinates
             # time scalar (default cfgrib behavior for single init time)
             time_coord = np.datetime64("2023-01-01T00:00:00")
-            step = np.array([np.timedelta64(0, 'h'), np.timedelta64(3, 'h')])
+            step = np.array([np.timedelta64(0, 'h'), np.timedelta64(3, 'h'), np.timedelta64(6, 'h')])
             number = np.array([1, 2], dtype=np.int16)
             latitude = np.array([55.0, 54.0])
             longitude = np.array([-5.0, -4.0])
@@ -76,10 +76,10 @@ class TestDownload(unittest.TestCase):
             if step_type == "inst":
                 # instantaneous variables
                 # t2m in Kelvin, hcc/mcc/lcc in 0-1
-                t2m = np.full((2, 2, 2, 2), 273.15, dtype=np.float32)
-                hcc = np.full((2, 2, 2, 2), 0.5, dtype=np.float32)
-                mcc = np.full((2, 2, 2, 2), 0.25, dtype=np.float32)
-                lcc = np.full((2, 2, 2, 2), 1.0, dtype=np.float32)
+                t2m = np.full((2, 3, 2, 2), 273.15, dtype=np.float32)
+                hcc = np.full((2, 3, 2, 2), 0.5, dtype=np.float32)
+                mcc = np.full((2, 3, 2, 2), 0.25, dtype=np.float32)
+                lcc = np.full((2, 3, 2, 2), 1.0, dtype=np.float32)
                 
                 return xr.Dataset(
                     data_vars={
@@ -88,14 +88,16 @@ class TestDownload(unittest.TestCase):
                         "mcc": (("number", "step", "latitude", "longitude"), mcc),
                         "lcc": (("number", "step", "latitude", "longitude"), lcc),
                         # Dummy variable that should be ignored by the schema
-                        "surface": (("number", "step", "latitude", "longitude"), np.zeros((2, 2, 2, 2)))
+                        "surface": (("number", "step", "latitude", "longitude"), np.zeros((2, 3, 2, 2)))
                     },
                     coords=coords
                 )
             elif step_type == "accum":
                 # accumulated variables
-                # ssrd in J m-2
-                ssrd = np.full((2, 2, 2, 2), 10800.0, dtype=np.float32)
+                # ssrd in J m-2, increasing over time: 0, 10800, 21600 (yields 1.0 W m-2 diff)
+                ssrd = np.zeros((2, 3, 2, 2), dtype=np.float32)
+                ssrd[:, 1, :, :] = 10800.0
+                ssrd[:, 2, :, :] = 21600.0
                 return xr.Dataset(
                     data_vars={
                         "ssrd": (("number", "step", "latitude", "longitude"), ssrd),

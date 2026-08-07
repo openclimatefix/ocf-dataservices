@@ -26,6 +26,7 @@ dependencies = [
     "ecmwfmars-data",
     "dynamical-data",
     "schemas",
+    "ecmwflive-data",
     "pandera>=0.32.1",
     "xarray>=2026.7.0",
 ]
@@ -56,6 +57,7 @@ members = ["packages/*"]
 ecmwfmars-data = { workspace = true }
 dynamical-data = { workspace = true }
 schemas = { workspace = true }
+ecmwflive-data = { workspace = true }
 
 
 [tool.hatch.build.targets.wheel]

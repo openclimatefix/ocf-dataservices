@@ -47,3 +47,24 @@ def medium_cloud_cover(dims: tuple[str, ...], nullable: bool = False) -> Any:
 
 def low_cloud_cover(dims: tuple[str, ...], nullable: bool = False) -> Any:
     return pa.Field(dims=dims, ge=0, le=100, nullable=nullable)
+
+def wind_u_200m(dims: tuple[str, ...], nullable: bool = False) -> Any:
+    return pa.Field(dims=dims, ge=-150, le=150, nullable=nullable)
+
+def wind_v_200m(dims: tuple[str, ...], nullable: bool = False) -> Any:
+    return pa.Field(dims=dims, ge=-150, le=150, nullable=nullable)
+
+def direct_solar_radiation(dims: tuple[str, ...], nullable: bool = True) -> Any:
+    return pa.Field(dims=dims, ge=0, le=2000, nullable=nullable)
+
+def uv_b_radiation(dims: tuple[str, ...], nullable: bool = True) -> Any:
+    return pa.Field(dims=dims, ge=0, le=2000, nullable=nullable)
+
+def total_precipitation_rate(dims: tuple[str, ...], nullable: bool = True) -> Any:
+    return pa.Field(dims=dims, ge=0, le=1, nullable=nullable)
+
+def snow_depth(dims: tuple[str, ...], nullable: bool = True) -> Any:
+    return pa.Field(dims=dims, ge=0, le=100, nullable=nullable)
+
+def visibility(dims: tuple[str, ...], nullable: bool = True) -> Any:
+    return pa.Field(dims=dims, ge=0, le=100000, nullable=nullable)
