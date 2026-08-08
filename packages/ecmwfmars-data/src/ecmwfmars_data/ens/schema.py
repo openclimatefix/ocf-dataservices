@@ -1,8 +1,8 @@
 from typing import ClassVar
 
 import numpy as np
-import pandera.xarray as pa
 from pandera.typing.xarray import Coordinate
+from schemas.base import NwpDatasetSchema
 from schemas.nwp_coordinates import ensemble_member, init_time, latitude, longitude, step
 from schemas.nwp_variables import (
     downward_short_wave_radiation_flux_surface,
@@ -13,7 +13,7 @@ from schemas.nwp_variables import (
 )
 
 
-class EcmwfEnsSchema(pa.DatasetModel):
+class EcmwfEnsSchema(NwpDatasetSchema):
     _chunks: ClassVar[dict[str, int]] = {"init_time": 1, "step": 1, "ensemble_member": 1, "latitude": -1, "longitude": -1}
     _shards: ClassVar[dict[str, int]] = {"init_time": 1, "step": -1, "ensemble_member": -1, "latitude": -1, "longitude": -1}
 
@@ -33,6 +33,5 @@ class EcmwfEnsSchema(pa.DatasetModel):
     medium_cloud_cover: np.float32 = medium_cloud_cover(dims=_dims, nullable=False)
     low_cloud_cover: np.float32 = low_cloud_cover(dims=_dims, nullable=False)
 
-    class Config:
-        strict = "filter" # Drops unlisted variables
-        strict_coords = "filter" # Drops unlisted coordinates
+    class Config(NwpDatasetSchema.Config):
+        pass

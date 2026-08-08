@@ -3,6 +3,10 @@ from pathlib import Path
 import cfgrib
 import numpy as np
 import xarray as xr
+from schemas.dim_order import enforce_dim_order
+from schemas.validation import validates
+
+from .schema import EcmwfLiveNlSchema, EcmwfLiveUkIndiaSchema
 
 
 def process_ecmwf_live(
@@ -12,6 +16,10 @@ def process_ecmwf_live(
 ) -> xr.Dataset:
     """
     Process raw ECMWF Live GRIB data into an Xarray Dataset.
+
+    This is region-agnostic and does not validate its output; callers should use
+    :func:`process_ecmwf_live_uk_india` or :func:`process_ecmwf_live_nl`, which wrap this function
+    and validate the result against the appropriate schema.
     """
     # Open using cfgrib with ignore_keys to prevent DatasetBuildError
     # from conflicting vertical levels and stepTypes.
@@ -160,16 +168,27 @@ def process_ecmwf_live(
         ds[var] = ds[var].astype(np.float32)
 
     ordered_dims = ("init_time", "step", "latitude", "longitude")
-    new_coords = {d: ds.coords[d].variable for d in ordered_dims if d in ds.coords}
-
-    ds_ordered = xr.Dataset(
-        data_vars={k: v.transpose(*[d for d in ordered_dims if d in v.dims]).variable 
-                   for k, v in ds.data_vars.items()},
-        coords=new_coords
-    )
-
-    ds_ordered = ds_ordered.transpose(*ordered_dims)
     schema_vars = list(set(var_mapping.values()))
-    ds_ordered = ds_ordered[[v for v in schema_vars if v in ds_ordered.data_vars]]
+    ds_ordered = enforce_dim_order(ds, ordered_dims, keep_vars=schema_vars)
 
     return ds_ordered
+
+
+@validates(EcmwfLiveUkIndiaSchema)
+def process_ecmwf_live_uk_india(
+    grib_path: Path | str,
+    bbox_nwse: list[float],
+    max_step_hours: int,
+) -> xr.Dataset:
+    """Process raw ECMWF Live GRIB data for the UK/India regions, validated against EcmwfLiveUkIndiaSchema."""
+    return process_ecmwf_live(grib_path=grib_path, bbox_nwse=bbox_nwse, max_step_hours=max_step_hours)
+
+
+@validates(EcmwfLiveNlSchema)
+def process_ecmwf_live_nl(
+    grib_path: Path | str,
+    bbox_nwse: list[float],
+    max_step_hours: int,
+) -> xr.Dataset:
+    """Process raw ECMWF Live GRIB data for the NL region, validated against EcmwfLiveNlSchema."""
+    return process_ecmwf_live(grib_path=grib_path, bbox_nwse=bbox_nwse, max_step_hours=max_step_hours)

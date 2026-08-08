@@ -1,8 +1,8 @@
 from typing import ClassVar
 
 import numpy as np
-import pandera.xarray as pa
 from pandera.typing.xarray import Coordinate
+from schemas.base import NwpDatasetSchema
 from schemas.nwp_coordinates import init_time, latitude, longitude, step
 from schemas.nwp_variables import (
     direct_solar_radiation,
@@ -26,7 +26,7 @@ from schemas.nwp_variables import (
 )
 
 
-class EcmwfLiveUkIndiaSchema(pa.DatasetModel):
+class EcmwfLiveUkIndiaSchema(NwpDatasetSchema):
     _chunks: ClassVar[dict[str, int]] = {"init_time": 1, "step": 1, "latitude": -1, "longitude": -1}
     _shards: ClassVar[dict[str, int]] = {"init_time": 1, "step": -1, "latitude": -1, "longitude": -1}
 
@@ -58,12 +58,11 @@ class EcmwfLiveUkIndiaSchema(pa.DatasetModel):
     total_cloud_cover_atmosphere: np.float32 = total_cloud_cover_atmosphere(dims=_dims, nullable=False)
     visibility: np.float32 = visibility(dims=_dims, nullable=True)
 
-    class Config:
-        strict = "filter"
-        strict_coords = "filter"
-        
+    class Config(NwpDatasetSchema.Config):
+        pass
 
-class EcmwfLiveNlSchema(pa.DatasetModel):
+
+class EcmwfLiveNlSchema(NwpDatasetSchema):
     _chunks: ClassVar[dict[str, int]] = {"init_time": 1, "step": 1, "latitude": -1, "longitude": -1}
     _shards: ClassVar[dict[str, int]] = {"init_time": 1, "step": -1, "latitude": -1, "longitude": -1}
 
@@ -95,7 +94,5 @@ class EcmwfLiveNlSchema(pa.DatasetModel):
     total_cloud_cover_atmosphere: np.float32 = total_cloud_cover_atmosphere(dims=_dims, nullable=False)
     visibility: np.float32 = visibility(dims=_dims, nullable=True)
 
-    class Config:
-        strict = "filter"
-        strict_coords = "filter"
-        
+    class Config(NwpDatasetSchema.Config):
+        pass

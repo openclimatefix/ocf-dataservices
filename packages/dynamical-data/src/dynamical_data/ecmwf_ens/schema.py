@@ -1,10 +1,10 @@
 from typing import ClassVar
 
 import numpy as np
-import pandera.xarray as pa
 import xarray as xr
 from pandera import check
 from pandera.typing.xarray import Coordinate
+from schemas.base import NwpDatasetSchema
 from schemas.nwp_coordinates import ensemble_member, init_time, latitude, longitude, step
 from schemas.nwp_variables import (
     categorical_precipitation_type_surface,
@@ -22,7 +22,7 @@ from schemas.nwp_variables import (
 )
 
 
-class EcmwfEnsSchema(pa.DatasetModel):
+class EcmwfEnsSchema(NwpDatasetSchema):
     _chunks: ClassVar[dict[str, int]] = {"init_time": 1, "step": 1, "ensemble_member": 1, "latitude": -1, "longitude": -1}
     _shards: ClassVar[dict[str, int]] = {"init_time": 1, "step": -1, "ensemble_member": -1, "latitude": -1, "longitude": -1}
 
@@ -60,7 +60,5 @@ class EcmwfEnsSchema(pa.DatasetModel):
     def max_2_percent_null(cls, da: xr.DataArray) -> bool:
         return float(da.isnull().mean()) < 0.02
 
-    class Config:
-        strict = "filter" # Drops unlisted variables
-        strict_coords = "filter" # Drops unlisted coordinates
+    class Config(NwpDatasetSchema.Config):
         chunked = True # Ensures the dataset is chunked

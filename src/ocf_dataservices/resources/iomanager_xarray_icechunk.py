@@ -91,11 +91,12 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
             )
 
         metadata = context.definition_metadata or {}
-        for key in ["chunks", "shards"]:
-            if list(obj.dims) != list(metadata[key].keys()):
+        schema = metadata["schema"]
+        for key, spec in (("chunks", schema._chunks), ("shards", schema._shards)):
+            if list(obj.dims) != list(spec.keys()):
                 raise dg.DagsterInvariantViolationError(
                     f"Dataset dimensions {list(obj.dims)} do not match supplied {key} keys " + \
-                    f"{list(metadata[key].keys())}"
+                    f"{list(spec.keys())}"
                 )
 
         keep_bits = metadata.get("keep_mantissa_bits", self.keep_mantissa_bits)
@@ -135,7 +136,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
             obj.to_zarr(
                 session.store,
                 mode="a",
-                append_dim=metadata["append_dim"],
+                append_dim=schema.append_dim(),
                 write_empty_chunks=False,
             )
         else:
@@ -148,11 +149,11 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
                     "dtype": "float32",
                     "chunks": tuple([
                         obj.coords[k].size if v == -1 else v
-                        for k, v in metadata["chunks"].items()
+                        for k, v in schema._chunks.items()
                     ]),
                     "shards": tuple([
                         obj.coords[k].size if v == -1 else v
-                        for k, v in metadata["shards"].items()
+                        for k, v in schema._shards.items()
                     ]),
                     "compressors": zarr.codecs.BloscCodec(
                         cname="zstd",
@@ -163,7 +164,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
                     coord: {"chunks": 10000}
                     for coord in obj.coords if coord not in obj.dims
                 } | {
-                    metadata["append_dim"]: {
+                    schema.append_dim(): {
                         "dtype": int,
                         "units": "nanoseconds since 1970-01-01",
                         "calendar": "proleptic_gregorian",
@@ -197,7 +198,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
                     "Input context has a partition key but no upstream output. "
                     "This is unexpected and likely indicates a misconfiguration."
                 )
-            append_dim: str = context.upstream_output.definition_metadata["append_dim"]
+            append_dim: str = context.upstream_output.definition_metadata["schema"].append_dim()
             # Filter to the specific partition
             partition_key = context.partition_key
             ds = ds.sel({append_dim: partition_key})

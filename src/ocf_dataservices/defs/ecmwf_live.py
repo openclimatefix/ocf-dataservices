@@ -6,7 +6,7 @@ from pathlib import Path
 import dagster as dg
 import xarray as xr
 from ecmwflive_data.download import download_live_ecmwf_partition, get_completed_init_times
-from ecmwflive_data.processing import process_ecmwf_live
+from ecmwflive_data.processing import process_ecmwf_live_nl, process_ecmwf_live_uk_india
 from ecmwflive_data.schema import EcmwfLiveNlSchema, EcmwfLiveUkIndiaSchema
 
 ecmwf_live_partitions = dg.TimeWindowPartitionsDefinition(
@@ -119,9 +119,7 @@ def l0_ecmwf_live_local(context: dg.AssetExecutionContext) -> dg.Output[Path]:
     metadata={
         "bbox_nwse": [60, -12, 48, 3],
         "max_step_hours": 84,
-        "append_dim": "init_time",
-        "chunks": EcmwfLiveUkIndiaSchema._chunks,
-        "shards": EcmwfLiveUkIndiaSchema._shards,
+        "schema": EcmwfLiveUkIndiaSchema,
     },
     automation_condition=dg.AutomationCondition.eager(),
 )
@@ -129,13 +127,12 @@ def l1_ecmwf_live_uk(
     context: dg.AssetExecutionContext, l0_ecmwf_live_local: Path
 ) -> dg.Output[xr.Dataset]:
     metadata = context.assets_def.get_asset_spec().metadata
-    ds = process_ecmwf_live(
+    ds = process_ecmwf_live_uk_india(
         grib_path=l0_ecmwf_live_local,
         bbox_nwse=metadata["bbox_nwse"],
         max_step_hours=metadata["max_step_hours"],
     )
-    validated_ds = EcmwfLiveUkIndiaSchema.validate(ds)
-    return dg.Output(validated_ds)
+    return dg.Output(ds)
 
 
 @dg.asset(
@@ -146,22 +143,19 @@ def l1_ecmwf_live_uk(
     metadata={
         "bbox_nwse": [35, 67, 6, 97],
         "max_step_hours": 84,
-        "append_dim": "init_time",
-        "chunks": EcmwfLiveUkIndiaSchema._chunks,
-        "shards": EcmwfLiveUkIndiaSchema._shards,
+        "schema": EcmwfLiveUkIndiaSchema,
     },
 )
 def l1_ecmwf_live_india(
     context: dg.AssetExecutionContext, l0_ecmwf_live_local: Path
 ) -> dg.Output[xr.Dataset]:
     metadata = context.assets_def.get_asset_spec().metadata
-    ds = process_ecmwf_live(
+    ds = process_ecmwf_live_uk_india(
         grib_path=l0_ecmwf_live_local,
         bbox_nwse=metadata["bbox_nwse"],
         max_step_hours=metadata["max_step_hours"],
     )
-    validated_ds = EcmwfLiveUkIndiaSchema.validate(ds)
-    return dg.Output(validated_ds)
+    return dg.Output(ds)
 
 
 @dg.asset(
@@ -172,19 +166,16 @@ def l1_ecmwf_live_india(
     metadata={
         "bbox_nwse": [53.8, 2.8, 50.6, 7.7],
         "max_step_hours": 56,
-        "append_dim": "init_time",
-        "chunks": EcmwfLiveNlSchema._chunks,
-        "shards": EcmwfLiveNlSchema._shards,
+        "schema": EcmwfLiveNlSchema,
     },
 )
 def l1_ecmwf_live_nl(
     context: dg.AssetExecutionContext, l0_ecmwf_live_local: Path
 ) -> dg.Output[xr.Dataset]:
     metadata = context.assets_def.get_asset_spec().metadata
-    ds = process_ecmwf_live(
+    ds = process_ecmwf_live_nl(
         grib_path=l0_ecmwf_live_local,
         bbox_nwse=metadata["bbox_nwse"],
         max_step_hours=metadata["max_step_hours"],
     )
-    validated_ds = EcmwfLiveNlSchema.validate(ds)
-    return dg.Output(validated_ds)
+    return dg.Output(ds)

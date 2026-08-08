@@ -1,9 +1,11 @@
 import datetime as dt
 from pathlib import Path
-from typing import Annotated, Final
+from typing import Final
 
 import numpy as np
 import xarray as xr
+from schemas.dim_order import enforce_dim_order
+from schemas.validation import validates
 
 from .client import MarsClient, MarsRequest
 from .schema import EcmwfEnsSchema
@@ -41,8 +43,11 @@ def download_raw(
         client.execute(request, f)
 
 
-def convert_to_dataset(grib_path: Path | str) -> Annotated[xr.Dataset, EcmwfEnsSchema]:
+@validates(EcmwfEnsSchema)
+def convert_to_dataset(grib_path: Path | str) -> xr.Dataset:
     """Convert a raw ECMWF MARS ENS GRIB file to an Xarray Dataset matching EcmwfEnsSchema.
+
+    The returned dataset is validated against EcmwfEnsSchema before being returned.
 
     Args:
         grib_path: Path to the raw GRIB file downloaded via `download_raw`.
@@ -131,30 +136,8 @@ def convert_to_dataset(grib_path: Path | str) -> Annotated[xr.Dataset, EcmwfEnsS
     for var in ds.data_vars:
         ds[var] = ds[var].astype(np.float32)
 
-    # Reorder dimensions exactly as required by the schema
-    ordered_dims = ("init_time", "step", "ensemble_member", "latitude", "longitude")
-    
-    # Extract coordinate variables in the exact order
-    new_coords = {d: ds.coords[d].variable for d in ordered_dims if d in ds.coords}
-    for c in ds.coords:
-        if c not in new_coords:
-            new_coords[c] = ds.coords[c].variable
+    # Reorder dimensions exactly as required by the schema, and drop any variables not in the
+    # schema (like 'surface').
+    ds_ordered = enforce_dim_order(ds, EcmwfEnsSchema.dims(), keep_vars=list(var_mapping.values()))
 
-    # Build new dataset enforcing the dimension order for variables
-    ds_ordered = xr.Dataset(
-        data_vars={k: v.transpose(*[d for d in ordered_dims if d in v.dims]).variable 
-                   for k, v in ds.data_vars.items()},
-        coords=new_coords
-    )
-
-    # Force exact dimension ordering at the Dataset level
-    ds_ordered = ds_ordered.transpose(*ordered_dims)
-    
-    # Drop any variables not in the schema (like 'surface')
-    schema_vars = list(var_mapping.values())
-    ds_ordered = ds_ordered[[v for v in schema_vars if v in ds_ordered.data_vars]]
-
-    # Validate
-    validated_ds = EcmwfEnsSchema.validate(ds_ordered)
-
-    return validated_ds
+    return ds_ordered
