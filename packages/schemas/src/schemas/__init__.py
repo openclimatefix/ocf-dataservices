@@ -1,3 +1,9 @@
+from .base import (
+    NwpDatasetSchema as NwpDatasetSchema,
+)
+from .dim_order import (
+    enforce_dim_order as enforce_dim_order,
+)
 from .nwp_coordinates import (
     ensemble_member as ensemble_member,
 )
@@ -58,12 +64,17 @@ from .nwp_variables import (
 from .nwp_variables import (
     wind_v_100m as wind_v_100m,
 )
+from .validation import (
+    validates as validates,
+)
 
 __all__ = [
+    "NwpDatasetSchema",
     "categorical_precipitation_type_surface",
     "dew_point_temperature_2m",
     "downward_long_wave_radiation_flux_surface",
     "downward_short_wave_radiation_flux_surface",
+    "enforce_dim_order",
     "ensemble_member",
     "high_cloud_cover",
     "init_time",
@@ -76,6 +87,7 @@ __all__ = [
     "step",
     "temperature_2m",
     "total_cloud_cover_atmosphere",
+    "validates",
     "wind_u_10m",
     "wind_u_100m",
     "wind_v_10m",

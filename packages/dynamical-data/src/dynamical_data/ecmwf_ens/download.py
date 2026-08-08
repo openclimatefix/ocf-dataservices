@@ -1,10 +1,12 @@
 import concurrent.futures
 import datetime as dt
-from typing import Annotated, Final, Literal, cast
+from typing import Final, Literal, cast
 
 import dynamical_catalog
 import numpy as np
 import xarray as xr
+from schemas.dim_order import enforce_dim_order
+from schemas.validation import validates
 
 from .schema import EcmwfEnsSchema
 
@@ -32,8 +34,11 @@ _ECMWF_ENS_VARS_TO_DOWNLOAD: Final[tuple[str, ...]] = (
 def open_it(
     nwp_init_time: dt.datetime,
     bbox_nwse: tuple[float, float, float, float] = (90, 180, -90, -180)
-) -> Annotated[xr.Dataset, EcmwfEnsSchema]:
+) -> xr.Dataset:
     """Lazily open the ECMWF ENS Icechunk store for a given init time.
+
+    The returned dataset has not been validated against EcmwfEnsSchema; call :func:`download` on
+    it to fetch and validate the data.
 
     No data is downloaded: the returned dataset is still backed by lazy Dask/Zarr arrays.
     Call :func:`download_ecmwf_ens_data` to actually fetch the data.
@@ -92,8 +97,11 @@ def open_it(
     return ds_sliced
 
 
-def download(ds_sliced: xr.Dataset) -> Annotated[xr.Dataset, EcmwfEnsSchema]:
+@validates(EcmwfEnsSchema)
+def download(ds_sliced: xr.Dataset) -> xr.Dataset:
     """Download (compute) a lazily-opened, already-sliced ECMWF ENS dataset.
+
+    The returned dataset is validated against EcmwfEnsSchema before being returned.
 
     Args:
         ds_sliced: A lazy dataset as returned by :func:`open_ecmwf_ens_run`.
@@ -127,47 +135,16 @@ def download(ds_sliced: xr.Dataset) -> Annotated[xr.Dataset, EcmwfEnsSchema]:
         for future in concurrent.futures.as_completed(futures):
             data_arrays.update(future.result())
 
-    # Create the dataset with explicitly ordered coordinates to enforce the top-level
-    # list(ds.dims) insertion order, which is strictly verified by Dagster IOManagers.
-    ordered_dims = ("init_time", "step", "ensemble_member", "latitude", "longitude")
-    
-    # Extract coordinate variables in the exact order we want
-    new_coords = {d: ds_sliced.coords[d].variable for d in ordered_dims if d in ds_sliced.coords}
-    for c in ds_sliced.coords:
-        if c not in new_coords:
-            new_coords[c] = ds_sliced.coords[c].variable
-
     # Build the dataset using .variable to strip coordinate dicts from the data variables,
-    # which prevents xarray from implicitly restoring the original dimension insertion order.
+    # which prevents xarray from implicitly restoring the original dimension insertion order,
+    # then enforce the dimension order that Dagster's IOManagers strictly verify.
     ds = xr.Dataset(
-        data_vars={k: v.transpose(*ordered_dims).variable for k, v in data_arrays.items()},
-        coords=new_coords
+        data_vars={k: v.variable for k, v in data_arrays.items()},
+        coords={c: ds_sliced.coords[c].variable for c in ds_sliced.coords},
     )
+    ds = enforce_dim_order(ds, EcmwfEnsSchema.dims(), keep_vars=list(data_arrays.keys()))
 
-    # Hack to force exact dimension ordering at the Dataset level in xarray
-    ds = ds.transpose(*ordered_dims)
-    ds = ds[list(data_arrays.keys())]
-
-    # Double-check the layout before passing to Pandera and Dagster
-    if list(ds.dims) != list(ordered_dims):
-        raise ValueError(f"Failed to enforce dimension order. Expected {ordered_dims}, got {list(ds.dims)}")
-
-    try:
-        validated_ds = EcmwfEnsSchema.validate(ds)
-    except Exception as e:
-        # Pandera sometimes doesn't surface the exact failing variable in the top-level exception.
-        # We manually check each variable for nulls to provide a clear error message.
-        null_vars = []
-        for var_name, data_array in ds.data_vars.items():
-            if data_array.isnull().any():
-                null_count = int(data_array.isnull().sum().item())
-                total_count = int(data_array.size)
-                null_vars.append(f"{var_name} ({null_count}/{total_count} NaNs, {null_count/total_count:.1%})")
-        if null_vars:
-            raise ValueError("Validation failed. The following variables contain null values:\n" + "\n".join(null_vars)) from e
-        raise  # Re-raise if it wasn't a null value issue
-
-    return validated_ds
+    return ds
 
 
 def _calc_slice_for_lat_or_lng(

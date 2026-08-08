@@ -40,9 +40,7 @@ _ECMWF_ENS_RETRY_DELAY_SECONDS: Final[int] = 1800
     # See: https://docs.dagster.io/guides/operate/managing-concurrency/concurrency-pools
     pool="ECMWF",
     metadata={
-        "append_dim": "init_time",
-        "chunks": DynamicalEcmwfEnsSchema._chunks,
-        "shards": DynamicalEcmwfEnsSchema._shards,
+        "schema": DynamicalEcmwfEnsSchema,
         "bbox_nwse": [62, -12, 48, 3],
     },
 )
@@ -58,7 +56,7 @@ def l1_dynamical_ecmwf_ens_uk_v1(context: dg.AssetExecutionContext) -> dg.Output
 
     existing_partition = io_manager.existing_partition(
         context.asset_key,
-        metadata["append_dim"],
+        metadata["schema"].append_dim(),
         partition_key,
     )
     if existing_partition is not None:
@@ -132,9 +130,7 @@ def l0_mars_ecmwf_ens_uk_v1(context: dg.AssetExecutionContext, mars_client: Dags
     pool="ECMWF",
     io_manager_key="l1_io_manager",
     metadata={
-        "append_dim": "init_time",
-        "chunks": MarsEcmwfEnsSchema._chunks,
-        "shards": MarsEcmwfEnsSchema._shards,
+        "schema": MarsEcmwfEnsSchema,
     }
 )
 def l1_mars_ecmwf_ens_uk_v1(
