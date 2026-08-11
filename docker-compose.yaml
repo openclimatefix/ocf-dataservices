@@ -1,0 +1,179 @@
+name: dagster
+
+# Postgres variables, used in both the postgres container for configuration,
+# and in the dagster services for connecting to the postgres container.
+# The variable names are the same in both thanks to the dagster.yaml
+# configuration file specifying such.
+x-postgres-variables: &postgres-variables
+  POSTGRES_USER: ${POSTGRES_USER:-dagster_user}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dagster_password}
+  POSTGRES_DB: dagster_db
+  POSTGRES_HOST: "dagster-postgres"
+
+x-dagster-configs: &dagster-configs
+  - source: dagster.yaml
+    target: /opt/dagster/home/dagster.yaml
+  - source: workspace.yaml
+    target: /opt/dagster/home/workspace.yaml
+
+
+services:
+  # This service runs the postgres DB used by dagster for run storage, schedule storage,
+  # and event log storage.
+  dagster-postgres:
+    image: postgres:18
+    container_name: dagster-postgres
+    environment:
+      <<: *postgres-variables
+      PGDATA: "/var/lib/postgresql/data"
+    volumes:
+      - dagster-pgdata-vol:/var/lib/postgresql/data
+    networks: ["dagster-network"]
+    healthcheck:
+      test: pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB
+      interval: 10s
+      timeout: 8s
+      retries: 5
+
+  # This service runs the gRPC server that loads user code, used by both dagster-webserver
+  # and dagster-daemon. By setting DAGSTER_CURRENT_IMAGE to its own image, we tell the
+  # run launcher to use this same image when launching runs in a new container as well.
+  dagster-codeserver:
+    container_name: dagster-codeserver
+    image: ghcr.io/openclimatefix/ocf-dataservices:latest
+    restart: always
+    pull_policy: always
+    env_file:
+      - .env
+    environment:
+      <<: *postgres-variables
+      DAGSTER_CURRENT_IMAGE: "ghcr.io/openclimatefix/ocf-dataservices"
+      DAGSTER_HOME: "/opt/dagster/home"
+    configs: *dagster-configs
+    networks: ["dagster-network"]
+
+  # This service runs dagster-webserver, which loads your user code from the user code container.
+  # Since our instance uses the QueuedRunCoordinator, any runs submitted from the webserver will be put on
+  # a queue and later dequeued and launched by dagster-daemon.
+  dagster-webserver:
+    container_name: dagster-webserver
+    image: dagster/dagster-k8s:latest
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3008", "-w", "/opt/dagster/home/workspace.yaml"]
+    ports:
+      - "3008:3008"
+    env_file:
+      - .env
+    environment:
+      <<: *postgres-variables
+      DAGSTER_HOME: "/opt/dagster/home"
+    configs: *dagster-configs
+    volumes:
+      # Enable termination of runs from the webserver
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/dagster_storage:/tmp/dagster_storage
+    networks: ["dagster-network"]
+    depends_on:
+      dagster-postgres:
+        condition: service_healthy
+      dagster-codeserver:
+        condition: service_started
+
+  # This service runs the dagster-daemon process, which is responsible for taking runs
+  # off of the queue and launching them, as well as creating runs from schedules or sensors.
+  dagster-daemon:
+    container_name: dagster-daemon
+    image: dagster/dagster-k8s:latest
+    command: ["dagster-daemon", "run", "-w", "/opt/dagster/home/workspace.yaml"]
+    restart: on-failure
+    env_file:
+      - .env
+    environment:
+      <<: *postgres-variables
+      DAGSTER_HOME: "/opt/dagster/home"
+    configs: *dagster-configs
+    volumes:
+      # Enable kicking off of runs from the daemon
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/dagster_storage:/tmp/dagster_storage
+    networks: ["dagster-network"]
+    depends_on:
+      dagster-postgres:
+        condition: service_healthy
+      dagster-codeserver:
+        condition: service_started
+
+networks:
+  dagster-network:
+    driver: bridge
+    name: dagster-network
+
+volumes:
+  # Volume for the postgres data directory
+  dagster-pgdata-vol:
+    name: dagster-pgdata-vol
+
+configs:
+  workspace.yaml:
+    content: |
+      load_from:
+        - grpc_server:
+            host: "dagster-codeserver"
+            port: 4000
+            location_name: "ocf_dataservices"
+
+  dagster.yaml:
+    content: |
+      storage:
+        postgres:
+          postgres_db:
+            username: {"env": "POSTGRES_USER"}
+            password: {"env": "POSTGRES_PASSWORD"}
+            hostname: dagster-postgres
+            db_name: dagster_db
+            port: 5432
+
+      local_artifact_storage:
+        module: dagster.core.storage.root
+        class: LocalArtifactStorage
+        config:
+          base_dir: "/opt/dagster/local"
+
+      run_coordinator:
+        module: dagster.core.run_coordinator
+        class: QueuedRunCoordinator
+        config:
+          max_concurrent_runs: 15
+          tag_concurrency_limits:
+            - key: "dagster/backfill"
+              limit: 10
+            - key: "nwp-consumer"
+              limit: 5
+
+      run_launcher:
+        module: dagster_docker
+        class: DockerRunLauncher
+        config:
+          network: dagster-network
+          env_vars:
+            - L0_ROOT_PATH
+            - L1_ROOT_PATH
+            - L2_ROOT_PATH
+            - ECMWF_API_KEY
+            - ECMWF_API_EMAIL
+            - ECMWF_API_URL
+            - ECMWF_REALTIME_S3_BUCKET
+            - ECMWF_REALTIME_S3_ACCESS_KEY
+            - ECMWF_REALTIME_S3_ACCESS_SECRET
+          container_kwargs:
+            volumes:
+              - /tmp/dagster_storage:/tmp/dagster_storage
+
+      retention:
+        schedule:
+          purge_after_days: 90
+        sensor:
+          purge_after_days:
+            skipped: 7
+            failure: 30
+            success: -1
+

@@ -35,7 +35,7 @@ def ecmwf_live_s3_sensor(context: dg.SensorEvaluationContext) -> dg.SensorResult
         return dg.SensorResult()
 
     last_processed_str = context.cursor or "2000-01-01T00:00:00Z"
-    last_processed = dt.datetime.fromisoformat(last_processed_str.replace("Z", "+00:00"))
+    last_processed = dt.datetime.fromisoformat(last_processed_str).replace(tzinfo=dt.UTC)
 
     try:
         completed_times = get_completed_init_times(
@@ -67,8 +67,7 @@ def ecmwf_live_s3_sensor(context: dg.SensorEvaluationContext) -> dg.SensorResult
                     },
                 )
             )
-            if it > new_cursor:
-                new_cursor = it
+            new_cursor = max(new_cursor, it)
 
     return dg.SensorResult(
         asset_events=asset_events,

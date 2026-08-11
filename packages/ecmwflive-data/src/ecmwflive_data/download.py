@@ -26,12 +26,12 @@ def get_completed_init_times(
 
     try:
         files = fs.ls(f"{bucket}/ecmwf")
-    except Exception as e: # noqa: BLE001
+    except Exception as e:
         raise RuntimeError(f"Failed to list S3 bucket: {e}") from e
 
     pattern = re.compile(rf"^{prefix}[DS](\d{{8}})[D]?(\d{{8}})\d$")
     init_time_max_steps: dict[dt.datetime, dt.datetime] = {}
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
 
     for f in files:
         filename = f.split("/")[-1]
@@ -47,10 +47,10 @@ def get_completed_init_times(
                     year += 1
 
                 it = dt.datetime.strptime(f"{year}{it_str}", "%Y%m%d%H%M").replace(
-                    tzinfo=dt.timezone.utc
+                    tzinfo=dt.UTC
                 )
                 tt = dt.datetime.strptime(f"{year}{tt_str}", "%Y%m%d%H%M").replace(
-                    tzinfo=dt.timezone.utc
+                    tzinfo=dt.UTC
                 )
 
                 if it not in init_time_max_steps or tt > init_time_max_steps[it]:

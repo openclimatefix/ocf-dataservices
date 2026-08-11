@@ -1,4 +1,10 @@
 import dagster as dg
+
+from ocf_dataservices.defs.assets import (
+        l0_mars_ecmwf_ens_uk_v1,
+        l1_dynamical_ecmwf_ens_uk_v1,
+        l1_mars_ecmwf_ens_uk_v1,
+)
 from ocf_dataservices.defs.ecmwf_live import (
         ecmwf_live_s3_sensor,
         l0_ecmwf_live_local,
@@ -6,12 +12,6 @@ from ocf_dataservices.defs.ecmwf_live import (
         l1_ecmwf_live_india,
         l1_ecmwf_live_nl,
         l1_ecmwf_live_uk,
-)
-
-from ocf_dataservices.defs.assets import (
-        l0_mars_ecmwf_ens_uk_v1,
-        l1_dynamical_ecmwf_ens_uk_v1,
-        l1_mars_ecmwf_ens_uk_v1,
 )
 from ocf_dataservices.resources.iomanager_raw_file import (
         RawFileIOManager,
