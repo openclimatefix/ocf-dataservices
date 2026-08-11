@@ -8,7 +8,7 @@ import xarray as xr
 from schemas.dim_order import enforce_dim_order
 from schemas.validation import validates
 
-from .schema import EcmwfEnsSchema
+from .schema import DynamicalEcmwfEnsSchema
 
 
 class NwpRunNotYetAvailable(Exception):
@@ -37,8 +37,8 @@ def open_it(
 ) -> xr.Dataset:
     """Lazily open the ECMWF ENS Icechunk store for a given init time.
 
-    The returned dataset has not been validated against EcmwfEnsSchema; call :func:`download` on
-    it to fetch and validate the data.
+    The returned dataset has not been validated against DynamicalEcmwfEnsSchema; call :func:`download`
+    on it to fetch and validate the data.
 
     No data is downloaded: the returned dataset is still backed by lazy Dask/Zarr arrays.
     Call :func:`download_ecmwf_ens_data` to actually fetch the data.
@@ -97,14 +97,11 @@ def open_it(
     return ds_sliced
 
 
-@validates(EcmwfEnsSchema)
-def download(ds_sliced: xr.Dataset) -> xr.Dataset:
-    """Download (compute) a lazily-opened, already-sliced ECMWF ENS dataset.
-
-    The returned dataset is validated against EcmwfEnsSchema before being returned.
+def _compute(ds_sliced: xr.Dataset) -> dict[str, xr.DataArray]:
+    """Fetch each variable of a lazily-opened, already-sliced dataset into memory.
 
     Args:
-        ds_sliced: A lazy dataset as returned by :func:`open_ecmwf_ens_run`.
+        ds_sliced: A lazy dataset as returned by :func:`open_it`.
     """
 
     def download_array(var_name: str) -> dict[str, xr.DataArray]:
@@ -135,6 +132,11 @@ def download(ds_sliced: xr.Dataset) -> xr.Dataset:
         for future in concurrent.futures.as_completed(futures):
             data_arrays.update(future.result())
 
+    return data_arrays
+
+
+def _to_dataset(data_arrays: dict[str, xr.DataArray], ds_sliced: xr.Dataset) -> xr.Dataset:
+    """Assemble computed variables and the source coordinates into a schema-ordered Dataset."""
     # Build the dataset using .variable to strip coordinate dicts from the data variables,
     # which prevents xarray from implicitly restoring the original dimension insertion order,
     # then enforce the dimension order that Dagster's IOManagers strictly verify.
@@ -142,9 +144,20 @@ def download(ds_sliced: xr.Dataset) -> xr.Dataset:
         data_vars={k: v.variable for k, v in data_arrays.items()},
         coords={c: ds_sliced.coords[c].variable for c in ds_sliced.coords},
     )
-    ds = enforce_dim_order(ds, EcmwfEnsSchema.dims(), keep_vars=list(data_arrays.keys()))
+    return enforce_dim_order(ds, DynamicalEcmwfEnsSchema.dims(), keep_vars=list(data_arrays.keys()))
 
-    return ds
+
+@validates(DynamicalEcmwfEnsSchema)
+def download(ds_sliced: xr.Dataset) -> xr.Dataset:
+    """Download (compute) a lazily-opened, already-sliced ECMWF ENS dataset.
+
+    The returned dataset is validated against DynamicalEcmwfEnsSchema before being returned.
+
+    Args:
+        ds_sliced: A lazy dataset as returned by :func:`open_it`.
+    """
+    data_arrays = _compute(ds_sliced)
+    return _to_dataset(data_arrays, ds_sliced)
 
 
 def _calc_slice_for_lat_or_lng(

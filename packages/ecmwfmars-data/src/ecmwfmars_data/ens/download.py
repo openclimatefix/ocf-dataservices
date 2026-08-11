@@ -8,7 +8,7 @@ from schemas.dim_order import enforce_dim_order
 from schemas.validation import validates
 
 from .client import MarsClient, MarsRequest
-from .schema import EcmwfEnsSchema
+from .schema import MarsEcmwfEnsSchema
 
 _MARS_PARAMETERS: Final[list[str]] = ["167", "169", "186", "187", "188"]
 
@@ -43,17 +43,11 @@ def download_raw(
         client.execute(request, f)
 
 
-@validates(EcmwfEnsSchema)
-def convert_to_dataset(grib_path: Path | str) -> xr.Dataset:
-    """Convert a raw ECMWF MARS ENS GRIB file to an Xarray Dataset matching EcmwfEnsSchema.
-
-    The returned dataset is validated against EcmwfEnsSchema before being returned.
+def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:
+    """Read a raw MARS ENS GRIB file into an Xarray Dataset with its original variable/coord names.
 
     Args:
         grib_path: Path to the raw GRIB file downloaded via `download_raw`.
-
-    Returns:
-        An xarray Dataset conforming to the EcmwfEnsSchema.
     """
     # Open instantaneous and accumulated fields separately to avoid stepType conflicts
     # in cfgrib, then merge them.
@@ -68,11 +62,14 @@ def convert_to_dataset(grib_path: Path | str) -> xr.Dataset:
             engine="cfgrib",
             backend_kwargs={"filter_by_keys": {"stepType": "accum"}},
         )
-        ds = xr.merge([ds_inst, ds_accum], compat="override")
+        return xr.merge([ds_inst, ds_accum], compat="override")
     except Exception:  # noqa: BLE001
         # If there are no accumulated fields (e.g. no ssrd) in the file, open_dataset might fail
-        ds = ds_inst
+        return ds_inst
 
+
+def _transform(ds: xr.Dataset) -> xr.Dataset:
+    """Rename, convert units, and reorder dimensions to match MarsEcmwfEnsSchema."""
     # Rename coordinates
     rename_coords = {}
     if "time" in ds.coords:
@@ -138,6 +135,19 @@ def convert_to_dataset(grib_path: Path | str) -> xr.Dataset:
 
     # Reorder dimensions exactly as required by the schema, and drop any variables not in the
     # schema (like 'surface').
-    ds_ordered = enforce_dim_order(ds, EcmwfEnsSchema.dims(), keep_vars=list(var_mapping.values()))
+    return enforce_dim_order(ds, MarsEcmwfEnsSchema.dims(), keep_vars=list(var_mapping.values()))
 
-    return ds_ordered
+
+@validates(MarsEcmwfEnsSchema)
+def convert_to_dataset(grib_path: Path | str) -> xr.Dataset:
+    """Convert a raw ECMWF MARS ENS GRIB file to an Xarray Dataset matching MarsEcmwfEnsSchema.
+
+    The returned dataset is validated against MarsEcmwfEnsSchema before being returned.
+
+    Args:
+        grib_path: Path to the raw GRIB file downloaded via `download_raw`.
+
+    Returns:
+        An xarray Dataset conforming to the MarsEcmwfEnsSchema.
+    """
+    return _transform(_read_raw_grib(grib_path))

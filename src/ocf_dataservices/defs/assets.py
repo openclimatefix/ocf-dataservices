@@ -7,9 +7,9 @@ from typing import Final
 import dagster as dg
 import xarray as xr
 from dynamical_data.ecmwf_ens.download import NwpRunNotYetAvailable, download, open_it
-from dynamical_data.ecmwf_ens.schema import EcmwfEnsSchema as DynamicalEcmwfEnsSchema
+from dynamical_data.ecmwf_ens.schema import DynamicalEcmwfEnsSchema
 from ecmwfmars_data.ens.download import convert_to_dataset, download_raw
-from ecmwfmars_data.ens.schema import EcmwfEnsSchema as MarsEcmwfEnsSchema
+from ecmwfmars_data.ens.schema import MarsEcmwfEnsSchema
 
 from ocf_dataservices.resources.mars import DagsterMarsClient
 
@@ -138,7 +138,7 @@ def l1_mars_ecmwf_ens_uk_v1(
     l0_mars_ecmwf_ens_uk_v1: Path
 ) -> dg.Output[xr.Dataset]:
     """
-    Converts raw ECMWF MARS ensemble GRIB data to an Xarray Dataset matching the EcmwfEnsSchema.
+    Converts raw ECMWF MARS ensemble GRIB data to an Xarray Dataset matching the MarsEcmwfEnsSchema.
     """
     grib_path = l0_mars_ecmwf_ens_uk_v1
     
