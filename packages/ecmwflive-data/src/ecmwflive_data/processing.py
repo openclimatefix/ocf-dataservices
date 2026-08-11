@@ -9,18 +9,8 @@ from schemas.validation import validates
 from .schema import EcmwfLiveNlSchema, EcmwfLiveUkIndiaSchema
 
 
-def process_ecmwf_live(
-    grib_path: Path | str,
-    bbox_nwse: list[float],
-    max_step_hours: int,
-) -> xr.Dataset:
-    """
-    Process raw ECMWF Live GRIB data into an Xarray Dataset.
-
-    This is region-agnostic and does not validate its output; callers should use
-    :func:`process_ecmwf_live_uk_india` or :func:`process_ecmwf_live_nl`, which wrap this function
-    and validate the result against the appropriate schema.
-    """
+def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:
+    """Read raw ECMWF Live GRIB data into an Xarray Dataset with its original variable/coord names."""
     # Open using cfgrib with ignore_keys to prevent DatasetBuildError
     # from conflicting vertical levels and stepTypes.
     # The GRIB file contains different resolutions (numberOfPoints), so we use cfgrib.open_datasets
@@ -69,8 +59,15 @@ def process_ecmwf_live(
 
     # Drop the 'number' scalar coordinate that cfgrib automatically adds for ECMWF data.
     # The schemas do not expect it.
-    ds = ds.drop_vars(["number"], errors="ignore")
+    return ds.drop_vars(["number"], errors="ignore")
 
+
+def _transform(
+    ds: xr.Dataset,
+    bbox_nwse: list[float],
+    max_step_hours: int,
+) -> xr.Dataset:
+    """Slice to region/step, rename, convert units, and reorder dimensions to match the schema."""
     # Spatial slicing
     # ECMWF S3 files typically use 0-360 longitude, but our schemas use -180 to 180.
     if "longitude" in ds.coords and ds.longitude.max() > 180:
@@ -169,9 +166,23 @@ def process_ecmwf_live(
 
     ordered_dims = ("init_time", "step", "latitude", "longitude")
     schema_vars = list(set(var_mapping.values()))
-    ds_ordered = enforce_dim_order(ds, ordered_dims, keep_vars=schema_vars)
+    return enforce_dim_order(ds, ordered_dims, keep_vars=schema_vars)
 
-    return ds_ordered
+
+def process_ecmwf_live(
+    grib_path: Path | str,
+    bbox_nwse: list[float],
+    max_step_hours: int,
+) -> xr.Dataset:
+    """
+    Process raw ECMWF Live GRIB data into an Xarray Dataset.
+
+    This is region-agnostic and does not validate its output; callers should use
+    :func:`process_ecmwf_live_uk_india` or :func:`process_ecmwf_live_nl`, which wrap this function
+    and validate the result against the appropriate schema.
+    """
+    ds = _read_raw_grib(grib_path)
+    return _transform(ds, bbox_nwse=bbox_nwse, max_step_hours=max_step_hours)
 
 
 @validates(EcmwfLiveUkIndiaSchema)

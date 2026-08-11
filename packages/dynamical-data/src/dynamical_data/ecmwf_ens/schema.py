@@ -22,7 +22,7 @@ from schemas.nwp_variables import (
 )
 
 
-class EcmwfEnsSchema(NwpDatasetSchema):
+class DynamicalEcmwfEnsSchema(NwpDatasetSchema):
     _chunks: ClassVar[dict[str, int]] = {"init_time": 1, "step": 1, "ensemble_member": 1, "latitude": -1, "longitude": -1}
     _shards: ClassVar[dict[str, int]] = {"init_time": 1, "step": -1, "ensemble_member": -1, "latitude": -1, "longitude": -1}
 
