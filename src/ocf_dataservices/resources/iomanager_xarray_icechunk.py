@@ -49,7 +49,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
             try:
                 repo = icechunk.Repository.create(storage)
                 created = True
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 raise OSError(f"Failed to create repository at storage: {storage}. Error: {e}")
         else:
             raise OSError(f"Repository does not exist at storage: {storage}")
@@ -80,7 +80,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
             if append_dim in ds.dims and target_date in ds[append_dim].values:
                 return ds.sel({append_dim: target_date})
             return None
-        except Exception:
+        except Exception:  # noqa: BLE001
             # If the repo, store, or dimension doesn't exist yet, it's not materialized
             return None
 
@@ -129,7 +129,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
             # (An icechunk repo might exist without a zarr dataset inside it if a previous run failed).
             xr.open_zarr(session.store, consolidated=False)
             dataset_exists = True
-        except Exception:
+        except Exception:  # noqa: BLE001
             dataset_exists = False
 
         if context.has_partition_key and dataset_exists:
