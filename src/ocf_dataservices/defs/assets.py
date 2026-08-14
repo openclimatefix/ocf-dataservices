@@ -83,7 +83,7 @@ def l1_dynamical_ecmwf_ens_uk_v1(context: dg.AssetExecutionContext) -> dg.Output
     key_prefix="nwp",
     partitions_def=ecmwf_ens_partitions,
     group_name="L0",
-    pool="ECMWF",
+    pool="ecmwf_mars",
     io_manager_key="l0_io_manager",
     metadata={
         "bbox_nwse": [62, -12, 48, 3],
@@ -130,7 +130,7 @@ def l0_mars_ecmwf_ens_uk_v1(context: dg.AssetExecutionContext, mars_client: Dags
     key_prefix="nwp",
     partitions_def=ecmwf_ens_partitions,
     group_name="L1",
-    pool="ECMWF",
+    pool="ecmwf_mars",
     io_manager_key="l1_io_manager",
     metadata={
         "schema": MarsEcmwfEnsSchema,
