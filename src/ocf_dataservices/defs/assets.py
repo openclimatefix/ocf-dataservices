@@ -31,6 +31,7 @@ _ECMWF_ENS_RETRY_DELAY_SECONDS: Final[int] = 1800
 """How long to wait between retries of a not-yet-published ECMWF run."""
 
 @dg.asset(
+    key_prefix="nwp",
     partitions_def=ecmwf_ens_partitions,
     group_name="L1",
     io_manager_key="l1_io_manager",
@@ -79,6 +80,7 @@ def l1_dynamical_ecmwf_ens_uk_v1(context: dg.AssetExecutionContext) -> dg.Output
     return dg.Output(ds, metadata={"processing_time_seconds": dg.MetadataValue.float(elapsed_time)})
 
 @dg.asset(
+    key_prefix="nwp",
     partitions_def=ecmwf_ens_partitions,
     group_name="L0",
     pool="ECMWF",
@@ -125,6 +127,7 @@ def l0_mars_ecmwf_ens_uk_v1(context: dg.AssetExecutionContext, mars_client: Dags
     return dg.Output(target_path, metadata={"processing_time_seconds": dg.MetadataValue.float(elapsed_time)})
 
 @dg.asset(
+    key_prefix="nwp",
     partitions_def=ecmwf_ens_partitions,
     group_name="L1",
     pool="ECMWF",
