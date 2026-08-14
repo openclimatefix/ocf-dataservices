@@ -1,6 +1,6 @@
 import concurrent.futures
 import datetime as dt
-from typing import Final, Literal, cast
+from typing import Final, Literal
 
 import dynamical_catalog
 import numpy as np
