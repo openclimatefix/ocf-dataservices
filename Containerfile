@@ -19,7 +19,7 @@ COPY src/ src/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
 
-FROM gcr.io/distroless/python3-debian13 AS runtime
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS runtime
 
 ARG GIT_SHA
 
@@ -34,6 +34,5 @@ WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY uv.lock ./
 
-# Clear the distroless default python3 entrypoint so orchestrators can cleanly override the command
-ENTRYPOINT []
+# Use standard exec form
 CMD ["dagster", "api", "grpc", "-m", "ocf_dataservices.definitions", "-h", "0.0.0.0", "-p", "4000"]
