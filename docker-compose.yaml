@@ -71,7 +71,9 @@ services:
     volumes:
       # Enable termination of runs from the webserver
       - /var/run/docker.sock:/var/run/docker.sock
-      - /tmp/dagster_storage:/tmp/dagster_storage
+      # Shared storage for compute logs and system artifacts
+      - dagster-local-vol:/opt/dagster/local
+      - dagster-local-vol:/opt/dagster/home/storage
     networks: ["dagster-network"]
     depends_on:
       dagster-postgres:
@@ -96,7 +98,9 @@ services:
     volumes:
       # Enable kicking off of runs from the daemon
       - /var/run/docker.sock:/var/run/docker.sock
-      - /tmp/dagster_storage:/tmp/dagster_storage
+      # Shared storage for compute logs and system artifacts
+      - dagster-local-vol:/opt/dagster/local
+      - dagster-local-vol:/opt/dagster/home/storage
     networks: ["dagster-network"]
     depends_on:
       dagster-postgres:
@@ -113,6 +117,9 @@ volumes:
   # Volume for the postgres data directory
   dagster-pgdata-vol:
     name: dagster-pgdata-vol
+  # Volume for Dagster internal compute logs and artifacts
+  dagster-local-vol:
+    name: dagster-local-vol
 
 configs:
   workspace.yaml:
@@ -169,7 +176,13 @@ configs:
           container_kwargs:
             volumes:
               - /etc/dagster/.env:/opt/dagster/home/.env:ro
-              - /tmp/dagster_storage:/tmp/dagster_storage
+              # Data storage mounts (needed by your asset code running in containers)
+              - /mnt/storage_a:/mnt/storage_a
+              - /mnt/storage_b:/mnt/storage_b
+              - /mnt/storage_c:/mnt/storage_c
+              # System storage mounts (shared with webserver/daemon for compute logs)
+              - dagster-local-vol:/opt/dagster/local
+              - dagster-local-vol:/opt/dagster/home/storage
 
       retention:
         schedule:
