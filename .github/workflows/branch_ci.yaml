@@ -9,4 +9,8 @@ on:
 jobs:
   branch_ci:
     uses: openclimatefix/.github/.github/workflows/branch_ci.yml@main
+    with:
+      containerfile: Containerfile
+      tests_runner: unittest
+      tests_folder: .
     secrets: inherit
