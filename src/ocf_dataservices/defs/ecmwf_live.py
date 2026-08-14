@@ -125,11 +125,11 @@ def l0_ecmwf_live_local_v1(context: dg.AssetExecutionContext) -> dg.Output[Path]
     automation_condition=dg.AutomationCondition.eager(),
 )
 def l1_ecmwf_live_uk_v1(
-    context: dg.AssetExecutionContext, l0_ecmwf_live_local_v1: Path
+    context: dg.AssetExecutionContext, nwp__l0_ecmwf_live_local_v1: Path
 ) -> dg.Output[xr.Dataset]:
     metadata = context.assets_def.get_asset_spec().metadata
     ds = process_ecmwf_live_uk_india(
-        grib_path=l0_ecmwf_live_local_v1,
+        grib_path=nwp__l0_ecmwf_live_local_v1,
         bbox_nwse=metadata["bbox_nwse"],
         max_step_hours=metadata["max_step_hours"],
     )
@@ -149,11 +149,11 @@ def l1_ecmwf_live_uk_v1(
     },
 )
 def l1_ecmwf_live_india_v1(
-    context: dg.AssetExecutionContext, l0_ecmwf_live_local_v1: Path
+    context: dg.AssetExecutionContext, nwp__l0_ecmwf_live_local_v1: Path
 ) -> dg.Output[xr.Dataset]:
     metadata = context.assets_def.get_asset_spec().metadata
     ds = process_ecmwf_live_uk_india(
-        grib_path=l0_ecmwf_live_local_v1,
+        grib_path=nwp__l0_ecmwf_live_local_v1,
         bbox_nwse=metadata["bbox_nwse"],
         max_step_hours=metadata["max_step_hours"],
     )
@@ -173,11 +173,11 @@ def l1_ecmwf_live_india_v1(
     },
 )
 def l1_ecmwf_live_nl_v1(
-    context: dg.AssetExecutionContext, l0_ecmwf_live_local_v1: Path
+    context: dg.AssetExecutionContext, nwp__l0_ecmwf_live_local_v1: Path
 ) -> dg.Output[xr.Dataset]:
     metadata = context.assets_def.get_asset_spec().metadata
     ds = process_ecmwf_live_nl(
-        grib_path=l0_ecmwf_live_local_v1,
+        grib_path=nwp__l0_ecmwf_live_local_v1,
         bbox_nwse=metadata["bbox_nwse"],
         max_step_hours=metadata["max_step_hours"],
     )

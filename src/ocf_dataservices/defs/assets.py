@@ -138,12 +138,12 @@ def l0_mars_ecmwf_ens_uk_v1(context: dg.AssetExecutionContext, mars_client: Dags
 )
 def l1_mars_ecmwf_ens_uk_v1(
     context: dg.AssetExecutionContext, 
-    l0_mars_ecmwf_ens_uk_v1: Path
+    nwp__l0_mars_ecmwf_ens_uk_v1: Path
 ) -> dg.Output[xr.Dataset]:
     """
     Converts raw ECMWF MARS ensemble GRIB data to an Xarray Dataset matching the MarsEcmwfEnsSchema.
     """
-    grib_path = l0_mars_ecmwf_ens_uk_v1
+    grib_path = nwp__l0_mars_ecmwf_ens_uk_v1
     
     context.log.info(f"Converting MARS ENS GRIB data from {grib_path}")
     
