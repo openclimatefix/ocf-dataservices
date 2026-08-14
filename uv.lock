@@ -655,6 +655,20 @@ wheels = [
 ]
 
 [[package]]
+name = "dagster-docker"
+version = "0.29.17"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dagster" },
+    { name = "docker" },
+    { name = "docker-image-py" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/98/04/51794832dee6eca9bf0f8dae32a7d05db3a8cbdf79b415534188b1369578/dagster_docker-0.29.17.tar.gz", hash = "sha256:03a998a9abd1094e2dcaa306dc6f2404896ef4174a7484f37174fd4aba277da7", size = 238040, upload-time = "2026-08-07T18:46:39.537Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1a/b2/2405b78ba19afb52d9d2b038cdec12f0412652dc06f20b7a69efa2f07517/dagster_docker-0.29.17-py3-none-any.whl", hash = "sha256:0f8f976b8643ab68e8a7d6b6305b409abf48dfa5924882d1ad7bb24d3112a0aa", size = 19122, upload-time = "2026-08-07T18:46:38.385Z" },
+]
+
+[[package]]
 name = "dagster-graphql"
 version = "1.13.17"
 source = { registry = "https://pypi.org/simple" }
@@ -751,6 +765,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/88/7f/731ff914b0255d3d065f45fd4e626d4b8c95dbcbaada049f337a6ac16410/docker-7.2.0.tar.gz", hash = "sha256:cebb93773d334f778e023a7ee352a8d6e13ab1bd3b863a4d4a59dec897df43ac", size = 118731, upload-time = "2026-07-09T14:53:46.39Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/75/23/529140fe1aab80fc6992f93a706deec709140a6397439139a054e1515c45/docker-7.2.0-py3-none-any.whl", hash = "sha256:a3f45fdeb9165e2d25d9a1d02ddf3bc70fb572cf5ebbf9b58558c22caf29b71f", size = 148775, upload-time = "2026-07-09T14:53:45.224Z" },
+]
+
+[[package]]
+name = "docker-image-py"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "regex" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d4/c9/b595f95322857b97ff471806ff14a64ea0e41bcd81a88fbbfe09a0190d28/docker_image_py-0.2.0.tar.gz", hash = "sha256:451ad5b3b656d00797e2b84e7ee2629a01012c52a83439cbcfbdeadc3ead3ae1", size = 16161, upload-time = "2026-06-29T06:57:51.096Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b6/ca/f1640909d860379c5ef0e7c2f94c81e654de3ce77add4a88be61674fe20c/docker_image_py-0.2.0-py3-none-any.whl", hash = "sha256:de6fa26bb4f90a1ad54be1dabc3cb0447007c37e396a5f2bfce5a4aadf15f0c9", size = 11207, upload-time = "2026-06-29T06:57:49.861Z" },
 ]
 
 [[package]]
@@ -1707,6 +1733,7 @@ source = { editable = "." }
 dependencies = [
     { name = "dagster" },
     { name = "dagster-aws" },
+    { name = "dagster-docker" },
     { name = "dagster-postgres" },
     { name = "dagster-webserver" },
     { name = "dynamical-data" },
@@ -1733,6 +1760,7 @@ dev = [
 requires-dist = [
     { name = "dagster", specifier = ">=1.12.11" },
     { name = "dagster-aws", specifier = ">=0.28.11" },
+    { name = "dagster-docker", specifier = ">=0.28.11" },
     { name = "dagster-postgres", specifier = ">=0.28.11" },
     { name = "dagster-webserver", specifier = ">=1.12.11" },
     { name = "dynamical-data", editable = "packages/dynamical-data" },

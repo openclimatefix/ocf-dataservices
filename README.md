@@ -149,3 +149,25 @@ Subclasses `schemas.base.NwpDatasetSchema` and declares:
 
 `Containerfile` builds a self-contained image (the installed venv only, no source tree) and runs
 `dagster api grpc -m ocf_dataservices.definitions`, for use as a Dagster code location.
+
+`docker-compose.yaml` runs the full stack — Postgres, the code location gRPC server
+(`dagster-codeserver`), `dagster-webserver`, and `dagster-daemon` — with `dagster.yaml` and
+`workspace.yaml` embedded as Docker `configs:` rather than separate host files. Runs are launched
+via `dagster_docker.DockerRunLauncher`, so each run executes in its own short-lived container
+rather than in-process in the daemon.
+
+To deploy on a server:
+
+1. Copy `docker-compose.yaml` to `/etc/dagster/docker-compose.yaml`.
+2. Create `/etc/dagster/.env` with the variables the pipelines need (`L0_ROOT_PATH`,
+   `L1_ROOT_PATH`, `L2_ROOT_PATH`, `ECMWF_API_KEY`, `ECMWF_API_EMAIL`, `ECMWF_API_URL`,
+   `ECMWF_REALTIME_S3_BUCKET`, `ECMWF_REALTIME_S3_ACCESS_KEY`, `ECMWF_REALTIME_S3_ACCESS_SECRET`,
+   plus any added per the "Adding a new data module" checklist above). This file is loaded three
+   ways: as `env_file:` for the three core services, for Postgres credential substitution in the
+   compose file itself, and — mounted read-only into every launched run container — via the
+   `secrets: EnvFileLoader` configured in the embedded `dagster.yaml`, so new variables only need
+   adding here, not to any run-launcher config.
+3. Install `deploy/dagster.service` as a systemd unit (e.g. `/etc/systemd/system/dagster.service`),
+   then `systemctl daemon-reload && systemctl enable --now dagster.service`. It runs
+   `docker compose -f /etc/dagster/docker-compose.yaml` with `WorkingDirectory=/etc/dagster`, so
+   the compose file's relative `.env` reference resolves correctly.

@@ -18,6 +18,7 @@ classifiers = [
 dependencies = [
     "dagster>=1.12.11",
     "dagster-aws>=0.28.11",
+    "dagster-docker>=0.28.11",
     "dagster-postgres>=0.28.11",
     "dagster-webserver>=1.12.11",
     "icechunk>=2.1.1",
