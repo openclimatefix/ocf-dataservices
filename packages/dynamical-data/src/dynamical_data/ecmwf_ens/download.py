@@ -59,7 +59,7 @@ def open_it(
 
     # Cast to xr.Dataset to satisfy the type checker, as indexing with a list is misidentified as
     # returning a DataArray.
-    ds = cast(xr.Dataset, ds[list(_ECMWF_ENS_VARS_TO_DOWNLOAD)])
+    ds = ds[list(_ECMWF_ENS_VARS_TO_DOWNLOAD)]
 
     if utc_nwp_init_time not in ds.init_time.values:
         raise NwpRunNotYetAvailable(f"{utc_nwp_init_time} is not in ds.init_time.values")
