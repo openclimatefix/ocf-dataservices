@@ -163,10 +163,11 @@ configs:
       # ExecuteRunArgs runs `dagster api execute_run`, which reads this loader). Means launched
       # containers pick up new vars from .env without needing to be listed anywhere else.
       secrets:
-        module: dagster._core.secrets.env_file
-        class: EnvFileLoader
-        config:
-          base_dir: "/opt/dagster/home"
+        custom:
+          module: dagster._core.secrets.env_file
+          class: EnvFileLoader
+          config:
+            base_dir: "/opt/dagster/home"
 
       run_launcher:
         module: dagster_docker

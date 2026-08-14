@@ -16,8 +16,8 @@ ecmwf_live_partitions = dg.TimeWindowPartitionsDefinition(
     fmt="%Y-%m-%dT%H:%M",
 )
 
-l0_ecmwf_live_s3 = dg.AssetSpec(
-    "l0_ecmwf_live_s3",
+l0_ecmwf_live_s3_v1 = dg.AssetSpec(
+    key=dg.AssetKey(["nwp", "l0_ecmwf_live_s3_v1"]),
     partitions_def=ecmwf_live_partitions,
     group_name="L0",
     description="External asset representing raw ECMWF live data in S3",
@@ -59,7 +59,7 @@ def ecmwf_live_s3_sensor(context: dg.SensorEvaluationContext) -> dg.SensorResult
         if ecmwf_live_partitions.has_partition_key(partition_key):
             asset_events.append(
                 dg.AssetMaterialization(
-                    asset_key=l0_ecmwf_live_s3.key,
+                    asset_key=l0_ecmwf_live_s3_v1.key,
                     partition=partition_key,
                     metadata={
                         "init_time": it.isoformat(),
@@ -76,14 +76,15 @@ def ecmwf_live_s3_sensor(context: dg.SensorEvaluationContext) -> dg.SensorResult
 
 
 @dg.asset(
-    deps=[l0_ecmwf_live_s3],
+    key_prefix="nwp",
+    deps=[l0_ecmwf_live_s3_v1],
     partitions_def=ecmwf_live_partitions,
     group_name="L0",
     io_manager_key="l0_io_manager",
     pool="ECMWF",
     automation_condition=dg.AutomationCondition.eager(),
 )
-def l0_ecmwf_live_local(context: dg.AssetExecutionContext) -> dg.Output[Path]:
+def l0_ecmwf_live_local_v1(context: dg.AssetExecutionContext) -> dg.Output[Path]:
     """Download ECMWF live files for the specific partition."""
     partition_time = context.partition_time_window.start
 
@@ -111,6 +112,7 @@ def l0_ecmwf_live_local(context: dg.AssetExecutionContext) -> dg.Output[Path]:
 
 
 @dg.asset(
+    key_prefix="nwp",
     partitions_def=ecmwf_live_partitions,
     group_name="L1",
     io_manager_key="l1_io_manager",
@@ -122,12 +124,12 @@ def l0_ecmwf_live_local(context: dg.AssetExecutionContext) -> dg.Output[Path]:
     },
     automation_condition=dg.AutomationCondition.eager(),
 )
-def l1_ecmwf_live_uk(
-    context: dg.AssetExecutionContext, l0_ecmwf_live_local: Path
+def l1_ecmwf_live_uk_v1(
+    context: dg.AssetExecutionContext, l0_ecmwf_live_local_v1: Path
 ) -> dg.Output[xr.Dataset]:
     metadata = context.assets_def.get_asset_spec().metadata
     ds = process_ecmwf_live_uk_india(
-        grib_path=l0_ecmwf_live_local,
+        grib_path=l0_ecmwf_live_local_v1,
         bbox_nwse=metadata["bbox_nwse"],
         max_step_hours=metadata["max_step_hours"],
     )
@@ -135,6 +137,7 @@ def l1_ecmwf_live_uk(
 
 
 @dg.asset(
+    key_prefix="nwp",
     partitions_def=ecmwf_live_partitions,
     group_name="L1",
     io_manager_key="l1_io_manager",
@@ -145,12 +148,12 @@ def l1_ecmwf_live_uk(
         "schema": EcmwfLiveUkIndiaSchema,
     },
 )
-def l1_ecmwf_live_india(
-    context: dg.AssetExecutionContext, l0_ecmwf_live_local: Path
+def l1_ecmwf_live_india_v1(
+    context: dg.AssetExecutionContext, l0_ecmwf_live_local_v1: Path
 ) -> dg.Output[xr.Dataset]:
     metadata = context.assets_def.get_asset_spec().metadata
     ds = process_ecmwf_live_uk_india(
-        grib_path=l0_ecmwf_live_local,
+        grib_path=l0_ecmwf_live_local_v1,
         bbox_nwse=metadata["bbox_nwse"],
         max_step_hours=metadata["max_step_hours"],
     )
@@ -158,6 +161,7 @@ def l1_ecmwf_live_india(
 
 
 @dg.asset(
+    key_prefix="nwp",
     partitions_def=ecmwf_live_partitions,
     group_name="L1",
     io_manager_key="l1_io_manager",
@@ -168,12 +172,12 @@ def l1_ecmwf_live_india(
         "schema": EcmwfLiveNlSchema,
     },
 )
-def l1_ecmwf_live_nl(
-    context: dg.AssetExecutionContext, l0_ecmwf_live_local: Path
+def l1_ecmwf_live_nl_v1(
+    context: dg.AssetExecutionContext, l0_ecmwf_live_local_v1: Path
 ) -> dg.Output[xr.Dataset]:
     metadata = context.assets_def.get_asset_spec().metadata
     ds = process_ecmwf_live_nl(
-        grib_path=l0_ecmwf_live_local,
+        grib_path=l0_ecmwf_live_local_v1,
         bbox_nwse=metadata["bbox_nwse"],
         max_step_hours=metadata["max_step_hours"],
     )
