@@ -37,7 +37,7 @@ def enforce_dim_order(
     ordered = ordered.transpose(*dims)
 
     if keep_vars is not None:
-        ordered = typing.cast(xr.Dataset, ordered[[v for v in keep_vars if v in ordered.data_vars]])
+        ordered = ordered[[v for v in keep_vars if v in ordered.data_vars]]
 
     if list(ordered.dims) != list(dims):
         raise ValueError(

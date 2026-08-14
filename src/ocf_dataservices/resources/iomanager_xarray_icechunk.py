@@ -158,7 +158,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
                     "compressors": zarr.codecs.BloscCodec(
                         cname="zstd",
                         clevel=3,
-                        shuffle=zarr.codecs.BloscShuffle.bitshuffle,
+                        shuffle="bitshuffle",
                     ),
                 } for var in obj.data_vars} | {
                     coord: {"chunks": 10000}
