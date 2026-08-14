@@ -12,5 +12,5 @@ jobs:
     with:
       containerfile: Containerfile
       tests_runner: unittest
-      tests_folder: .
+      tests_folder: packages/**/tests
     secrets: inherit
