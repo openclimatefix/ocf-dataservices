@@ -141,8 +141,8 @@ Subclasses `schemas.base.NwpDatasetSchema` and declares:
 - `make run` — starts the local Dagster UI/daemon (`uv run dg dev`), using `dagster_history/` for
   run storage.
 - `make lint` — `ruff check --fix .`
-- Tests live per-package under `packages/<name>/tests`, written as a mix of `pytest`-style functions
-  and `unittest.TestCase`s; run with e.g. `uv run --with pytest pytest packages/<name>/tests`.
+- Tests live per-package under `packages/<name>/tests`, written as `unittest.TestCase`s;
+  run with e.g. `uv run python -m unittest discover -s packages/<name>/tests`.
 - `uv sync --all-packages` after adding or changing a workspace member's dependencies.
 
 ## Deployment
