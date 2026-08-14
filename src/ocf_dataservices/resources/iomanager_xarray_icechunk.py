@@ -108,12 +108,12 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
                     if hasattr(da.data, "map_blocks"):
                         # Support Dask-backed datasets without computing them into memory
                         new_data = da.data.map_blocks(
-                            lambda x: (x.view(np.int32) & mask).view(np.float32), 
+                            lambda x: np.bitwise_and(x.view(np.int32), mask).view(np.float32), 
                             dtype=np.float32
                         )
                     else:
                         # In-memory NumPy datasets
-                        new_data = (da.values.view(np.int32) & mask).view(np.float32)
+                        new_data = np.bitwise_and(da.values.view(np.int32), mask).view(np.float32)
                     return da.copy(data=new_data)
                 return da
 
