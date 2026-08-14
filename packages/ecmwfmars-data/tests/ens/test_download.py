@@ -126,15 +126,17 @@ class TestDownload(unittest.TestCase):
             self.assertIn("low_cloud_cover", ds.data_vars)
             self.assertNotIn("surface", ds.data_vars) # Should be dropped/ignored
             
-            # Check conversions
-            # 273.15 K -> 0.0 C
-            np.testing.assert_allclose(ds["temperature_2m"].values, 0.0, atol=1e-5)
-            # 10800 J m-2 -> 1.0 W m-2
-            np.testing.assert_allclose(ds["downward_short_wave_radiation_flux_surface"].values, 1.0, atol=1e-5)
-            # 0.5 -> 50.0%
-            np.testing.assert_allclose(ds["high_cloud_cover"].values, 50.0, atol=1e-5)
-            np.testing.assert_allclose(ds["medium_cloud_cover"].values, 25.0, atol=1e-5)
-            np.testing.assert_allclose(ds["low_cloud_cover"].values, 100.0, atol=1e-5)
+            # Check conversions using subtests
+            expected_conversions = [
+                ("temperature_2m", 0.0),
+                ("downward_short_wave_radiation_flux_surface", 1.0),
+                ("high_cloud_cover", 50.0),
+                ("medium_cloud_cover", 25.0),
+                ("low_cloud_cover", 100.0),
+            ]
+            for var_name, expected_value in expected_conversions:
+                with self.subTest(var=var_name):
+                    np.testing.assert_allclose(ds[var_name].values, expected_value, atol=1e-5)
             
             # Check coords renaming
             self.assertIn("init_time", ds.coords)

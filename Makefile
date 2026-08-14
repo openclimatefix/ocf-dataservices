@@ -37,6 +37,10 @@ run: init
 lint:
 	@uv run ruff check --fix .
 
+.PHONY: test
+test:
+	@uv run python -m unittest `find packages -name "test_*.py"`
+
 .PHONY: clean
 clean:
 	@echo "Note: Saved data is not cleaned, this will have to be done manually."
