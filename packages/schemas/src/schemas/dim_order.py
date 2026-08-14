@@ -1,3 +1,4 @@
+import typing
 from collections.abc import Sequence
 
 import xarray as xr
@@ -20,14 +21,15 @@ def enforce_dim_order(
         keep_vars: If given, restrict the output to these data variables (in this order, filtered
             to those actually present).
     """
-    new_coords = {d: ds.coords[d].variable for d in dims if d in ds.coords}
+    new_coords: dict[str, xr.Variable] = {d: ds.coords[d].variable for d in dims if d in ds.coords}
     for c in ds.coords:
-        if c not in new_coords:
-            new_coords[c] = ds.coords[c].variable
+        c_str = str(c)
+        if c_str not in new_coords:
+            new_coords[c_str] = ds.coords[c].variable
 
     ordered = xr.Dataset(
         data_vars={
-            name: da.transpose(*[d for d in dims if d in da.dims]).variable
+            str(name): da.transpose(*[d for d in dims if d in da.dims]).variable
             for name, da in ds.data_vars.items()
         },
         coords=new_coords,
@@ -35,7 +37,7 @@ def enforce_dim_order(
     ordered = ordered.transpose(*dims)
 
     if keep_vars is not None:
-        ordered = ordered[[v for v in keep_vars if v in ordered.data_vars]]
+        ordered = typing.cast(xr.Dataset, ordered[[v for v in keep_vars if v in ordered.data_vars]])
 
     if list(ordered.dims) != list(dims):
         raise ValueError(

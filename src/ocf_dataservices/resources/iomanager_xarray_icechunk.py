@@ -64,7 +64,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
         """Gets a partition if it already exists, otherwise returns None."""
         store_path = self._get_store_path(asset_key)
         try:
-            repo = self._get_repo(store_path)
+            repo, _ = self._get_repo(store_path)
         except OSError:
             # The repo doesn't exist, so the partition can't exist either
             return None
@@ -188,7 +188,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
 
     def load_input(self, context: dg.InputContext) -> xr.Dataset:
         store_path = self._get_store_path(context.asset_key)
-        repo = self._get_repo(store_path)
+        repo, _ = self._get_repo(store_path)
         session = repo.readonly_session(branch="main")
         ds = xr.open_zarr(session.store, consolidated=False)
 

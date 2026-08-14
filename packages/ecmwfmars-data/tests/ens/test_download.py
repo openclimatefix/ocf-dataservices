@@ -2,7 +2,7 @@ import datetime as dt
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import xarray as xr
@@ -54,7 +54,8 @@ class TestDownload(unittest.TestCase):
         # We mock xr.open_dataset to return a simple dataset
         # since generating a real GRIB file in tests is complex
         
-        def mock_open_dataset(path, engine, backend_kwargs=None):
+        def mock_open_dataset(path, engine, backend_kwargs=None, **kwargs):
+            backend_kwargs = backend_kwargs or {}
             step_type = backend_kwargs.get("filter_by_keys", {}).get("stepType")
             
             # Create dummy coordinates
@@ -108,10 +109,7 @@ class TestDownload(unittest.TestCase):
                 raise ValueError("Unexpected stepType")
                 
         # Patch xr.open_dataset
-        original_open_dataset = xr.open_dataset
-        xr.open_dataset = mock_open_dataset
-        
-        try:
+        with patch("xarray.open_dataset", side_effect=mock_open_dataset):
             ds = convert_to_dataset("dummy_path.grib")
             
             # Check dimensions order
@@ -141,9 +139,6 @@ class TestDownload(unittest.TestCase):
             # Check coords renaming
             self.assertIn("init_time", ds.coords)
             self.assertIn("ensemble_member", ds.coords)
-            
-        finally:
-            xr.open_dataset = original_open_dataset
 
 
 if __name__ == "__main__":
