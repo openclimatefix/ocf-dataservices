@@ -85,7 +85,7 @@ def ecmwf_live_s3_sensor(context: dg.SensorEvaluationContext) -> dg.SensorResult
     automation_condition=dg.AutomationCondition.eager(),
 )
 def l0_ecmwf_live_local_v1(context: dg.AssetExecutionContext) -> dg.Output[Path]:
-    """Download ECMWF live files for the specific partition."""
+    """Download ECMWF live files for a specific partition into a local temporary GRIB file."""
     partition_time = context.partition_time_window.start
 
     fd, temp_path = tempfile.mkstemp(
@@ -128,6 +128,7 @@ def l0_ecmwf_live_local_v1(context: dg.AssetExecutionContext) -> dg.Output[Path]
 def l1_ecmwf_live_uk_v1(
     context: dg.AssetExecutionContext, l0_ecmwf_live_local_v1: Path
 ) -> dg.Output[xr.Dataset]:
+    """Process L0 local GRIB data into L1 xarray dataset for the UK region."""
     metadata = context.assets_def.get_asset_spec().metadata
     ds = process_ecmwf_live_uk_india(
         grib_path=l0_ecmwf_live_local_v1,
@@ -153,6 +154,7 @@ def l1_ecmwf_live_uk_v1(
 def l1_ecmwf_live_india_v1(
     context: dg.AssetExecutionContext, l0_ecmwf_live_local_v1: Path
 ) -> dg.Output[xr.Dataset]:
+    """Process L0 local GRIB data into L1 xarray dataset for the India region."""
     metadata = context.assets_def.get_asset_spec().metadata
     ds = process_ecmwf_live_uk_india(
         grib_path=l0_ecmwf_live_local_v1,
@@ -178,6 +180,7 @@ def l1_ecmwf_live_india_v1(
 def l1_ecmwf_live_nl_v1(
     context: dg.AssetExecutionContext, l0_ecmwf_live_local_v1: Path
 ) -> dg.Output[xr.Dataset]:
+    """Process L0 local GRIB data into L1 xarray dataset for the Netherlands (NL) region."""
     metadata = context.assets_def.get_asset_spec().metadata
     ds = process_ecmwf_live_nl(
         grib_path=l0_ecmwf_live_local_v1,
