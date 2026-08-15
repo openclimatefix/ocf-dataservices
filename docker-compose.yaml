@@ -47,7 +47,7 @@ services:
       - .env
     environment:
       <<: *postgres-variables
-      DAGSTER_CURRENT_IMAGE: "ghcr.io/openclimatefix/ocf-dataservices"
+      DAGSTER_CURRENT_IMAGE: "ghcr.io/openclimatefix/ocf-dataservices:devsjc-rewrite"
       DAGSTER_HOME: "/opt/dagster/home"
     configs: *dagster-configs
     networks: ["dagster-network"]
@@ -93,6 +93,7 @@ services:
       - .env
     environment:
       <<: *postgres-variables
+      DAGSTER_CURRENT_IMAGE: "ghcr.io/openclimatefix/ocf-dataservices:devsjc-rewrite"
       DAGSTER_HOME: "/opt/dagster/home"
     configs: *dagster-configs
     volumes:
