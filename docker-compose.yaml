@@ -165,8 +165,8 @@ configs:
       # containers pick up new vars from .env without needing to be listed anywhere else.
       secrets:
         custom:
-          module: dagster._core.secrets.env_file
-          class: EnvFileLoader
+          module: ocf_dataservices.resources.secrets
+          class: DotEnvSecretsLoader
           config:
             base_dir: "/opt/dagster/home"
 
@@ -175,6 +175,16 @@ configs:
         class: DockerRunLauncher
         config:
           network: dagster-network
+          # Only Postgres creds + DAGSTER_HOME go here: DagsterInstance.from_ref() needs these
+          # to construct run storage *before* the secrets loader below can run, so they can't
+          # be sourced from the mounted .env file. Everything else (L0_ROOT_PATH, ECMWF_*,
+          # etc.) is picked up automatically from /etc/dagster/.env via the secrets loader.
+          env_vars:
+            - POSTGRES_USER
+            - POSTGRES_PASSWORD
+            - POSTGRES_DB
+            - POSTGRES_HOST
+            - DAGSTER_HOME
           container_kwargs:
             volumes:
               - /etc/dagster/.env:/opt/dagster/home/.env:ro
