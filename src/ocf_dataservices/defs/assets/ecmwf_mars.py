@@ -21,7 +21,7 @@ from ocf_dataservices.resources.mars import DagsterMarsClient
     metadata={
         "bbox_nwse": [62, -12, 48, 3],
         "steps": list(range(86)),
-        "numbers": list(range(1, 52)), 
+        "numbers": list(range(1, 51)), 
     }
 )
 def l0_mars_ecmwf_ens_uk_v1(context: dg.AssetExecutionContext, mars_client: DagsterMarsClient) -> dg.Output[Path]:

@@ -15,7 +15,7 @@ def step(ge_hours: int = 0, le_hours: int = 85) -> Any:
         le=np.timedelta64(le_hours, 'h'),
     )
 
-def ensemble_member(ge: int = 1, le: int = 51) -> Any:
+def ensemble_member(ge: int = 1, le: int = 50) -> Any:
     return pa.Field(dims=("ensemble_member",), nullable=False, ge=ge, le=le)
 
 def longitude(ge: float = -180, le: float = 180) -> Any:
