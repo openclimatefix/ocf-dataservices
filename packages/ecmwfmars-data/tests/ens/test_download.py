@@ -74,7 +74,7 @@ class TestDownload(unittest.TestCase):
                 "longitude": longitude,
             }
             
-            if step_type == "inst":
+            if step_type == "instant":
                 # instantaneous variables
                 # t2m in Kelvin, hcc/mcc/lcc in 0-1
                 t2m = np.full((2, 3, 2, 2), 273.15, dtype=np.float32)

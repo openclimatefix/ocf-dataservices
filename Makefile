@@ -5,6 +5,12 @@ storage:
   sqlite:
     base_dir: "dagster_history"
 
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+  config:
+    max_concurrent_runs: 25
+
 concurrency:
   pools:
     default_limit: 1  # Used to limit concurrency of the ecmwf_ens asset

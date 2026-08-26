@@ -54,7 +54,7 @@ def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:
     ds_inst = xr.open_dataset(
         grib_path,
         engine="cfgrib",
-        backend_kwargs={"filter_by_keys": {"stepType": "inst"}},
+        backend_kwargs={"filter_by_keys": {"stepType": "instant"}},
     )
     try:
         ds_accum = xr.open_dataset(
