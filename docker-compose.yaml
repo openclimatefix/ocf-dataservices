@@ -152,10 +152,10 @@ configs:
         module: dagster.core.run_coordinator
         class: QueuedRunCoordinator
         config:
-          max_concurrent_runs: 15
+          max_concurrent_runs: 25
           tag_concurrency_limits:
             - key: "dagster/backfill"
-              limit: 10
+              limit: 25
             - key: "nwp-consumer"
               limit: 5
 
