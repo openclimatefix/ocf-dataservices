@@ -6,8 +6,8 @@ from pathlib import Path
 import dagster as dg
 import xarray as xr
 from ecmwflive_data.download import download_live_ecmwf_partition, get_completed_init_times
-from ecmwflive_data.processing import process_ecmwf_live_nl, process_ecmwf_live_uk_india
-from ecmwflive_data.schema import EcmwfLiveNlSchema, EcmwfLiveUkIndiaSchema
+from ecmwflive_data.processing import process_ecmwf_live_validated
+from ecmwflive_data.schema import EcmwfLiveSchema
 
 ecmwf_live_partitions = dg.TimeWindowPartitionsDefinition(
     cron_schedule="0 0,6,12,18 * * *",
@@ -118,19 +118,19 @@ def l0_ecmwf_live_local_v1(context: dg.AssetExecutionContext) -> dg.Output[Path]
     io_manager_key="l1_io_manager",
     pool="ECMWF",
     metadata={
-        "bbox_nwse": [60, -12, 48, 3],
+        "bbox_nwse": [63, -12, 35, 26],
         "max_step_hours": 84,
-        "schema": EcmwfLiveUkIndiaSchema,
+        "schema": EcmwfLiveSchema,
     },
     automation_condition=dg.AutomationCondition.eager(),
     ins={"l0_ecmwf_live_local_v1": dg.AssetIn(key=dg.AssetKey(["nwp", "l0_ecmwf_live_local_v1"]))},
 )
-def l1_ecmwf_live_uk_v1(
+def l1_ecmwf_live_west_europe_v1(
     context: dg.AssetExecutionContext, l0_ecmwf_live_local_v1: Path
 ) -> dg.Output[xr.Dataset]:
-    """Process L0 local GRIB data into L1 xarray dataset for the UK region."""
+    """Process L0 local GRIB data into L1 xarray dataset for the west Europe region."""
     metadata = context.assets_def.get_asset_spec().metadata
-    ds = process_ecmwf_live_uk_india(
+    ds = process_ecmwf_live_validated(
         grib_path=l0_ecmwf_live_local_v1,
         bbox_nwse=metadata["bbox_nwse"],
         max_step_hours=metadata["max_step_hours"],
@@ -147,8 +147,9 @@ def l1_ecmwf_live_uk_v1(
     metadata={
         "bbox_nwse": [35, 67, 6, 97],
         "max_step_hours": 84,
-        "schema": EcmwfLiveUkIndiaSchema,
+        "schema": EcmwfLiveSchema,
     },
+    automation_condition=dg.AutomationCondition.eager(),
     ins={"l0_ecmwf_live_local_v1": dg.AssetIn(key=dg.AssetKey(["nwp", "l0_ecmwf_live_local_v1"]))},
 )
 def l1_ecmwf_live_india_v1(
@@ -156,33 +157,7 @@ def l1_ecmwf_live_india_v1(
 ) -> dg.Output[xr.Dataset]:
     """Process L0 local GRIB data into L1 xarray dataset for the India region."""
     metadata = context.assets_def.get_asset_spec().metadata
-    ds = process_ecmwf_live_uk_india(
-        grib_path=l0_ecmwf_live_local_v1,
-        bbox_nwse=metadata["bbox_nwse"],
-        max_step_hours=metadata["max_step_hours"],
-    )
-    return dg.Output(ds)
-
-
-@dg.asset(
-    key_prefix="nwp",
-    partitions_def=ecmwf_live_partitions,
-    group_name="L1",
-    io_manager_key="l1_io_manager",
-    pool="ECMWF",
-    metadata={
-        "bbox_nwse": [53.8, 2.8, 50.6, 7.7],
-        "max_step_hours": 56,
-        "schema": EcmwfLiveNlSchema,
-    },
-    ins={"l0_ecmwf_live_local_v1": dg.AssetIn(key=dg.AssetKey(["nwp", "l0_ecmwf_live_local_v1"]))},
-)
-def l1_ecmwf_live_nl_v1(
-    context: dg.AssetExecutionContext, l0_ecmwf_live_local_v1: Path
-) -> dg.Output[xr.Dataset]:
-    """Process L0 local GRIB data into L1 xarray dataset for the Netherlands (NL) region."""
-    metadata = context.assets_def.get_asset_spec().metadata
-    ds = process_ecmwf_live_nl(
+    ds = process_ecmwf_live_validated(
         grib_path=l0_ecmwf_live_local_v1,
         bbox_nwse=metadata["bbox_nwse"],
         max_step_hours=metadata["max_step_hours"],

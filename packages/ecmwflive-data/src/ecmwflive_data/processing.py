@@ -6,7 +6,7 @@ import xarray as xr
 from schemas.dim_order import enforce_dim_order
 from schemas.validation import validates
 
-from .schema import EcmwfLiveNlSchema, EcmwfLiveUkIndiaSchema
+from .schema import EcmwfLiveSchema
 
 
 def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:
@@ -178,28 +178,18 @@ def process_ecmwf_live(
     Process raw ECMWF Live GRIB data into an Xarray Dataset.
 
     This is region-agnostic and does not validate its output; callers should use
-    :func:`process_ecmwf_live_uk_india` or :func:`process_ecmwf_live_nl`, which wrap this function
-    and validate the result against the appropriate schema.
+    :func:`process_ecmwf_live_validated`, which wraps this function and validates the result
+    against :class:`EcmwfLiveSchema`.
     """
     ds = _read_raw_grib(grib_path)
     return _transform(ds, bbox_nwse=bbox_nwse, max_step_hours=max_step_hours)
 
 
-@validates(EcmwfLiveUkIndiaSchema)
-def process_ecmwf_live_uk_india(
+@validates(EcmwfLiveSchema)
+def process_ecmwf_live_validated(
     grib_path: Path | str,
     bbox_nwse: list[float],
     max_step_hours: int,
 ) -> xr.Dataset:
-    """Process raw ECMWF Live GRIB data for the UK/India regions, validated against EcmwfLiveUkIndiaSchema."""
-    return process_ecmwf_live(grib_path=grib_path, bbox_nwse=bbox_nwse, max_step_hours=max_step_hours)
-
-
-@validates(EcmwfLiveNlSchema)
-def process_ecmwf_live_nl(
-    grib_path: Path | str,
-    bbox_nwse: list[float],
-    max_step_hours: int,
-) -> xr.Dataset:
-    """Process raw ECMWF Live GRIB data for the NL region, validated against EcmwfLiveNlSchema."""
+    """Process raw ECMWF Live GRIB data for a region, validated against EcmwfLiveSchema."""
     return process_ecmwf_live(grib_path=grib_path, bbox_nwse=bbox_nwse, max_step_hours=max_step_hours)

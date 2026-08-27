@@ -2,13 +2,13 @@ import unittest
 
 import numpy as np
 import xarray as xr
-from ecmwflive_data.schema import EcmwfLiveNlSchema
+from ecmwflive_data.schema import EcmwfLiveSchema
 from pandera.errors import SchemaError
 
 
 class TestSchemas(unittest.TestCase):
-    def test_nl_schema_rejects_step_above_56(self):
-        """Test that NL schema correctly rejects steps > 56 hours."""
+    def test_schema_rejects_step_above_84(self):
+        """Test that the schema correctly rejects steps > 84 hours."""
         ds = xr.Dataset(
             data_vars={
                 "wind_u_10m": (("init_time", "step", "latitude", "longitude"), np.ones((1, 2, 2, 2), dtype=np.float32)),
@@ -32,13 +32,13 @@ class TestSchemas(unittest.TestCase):
             },
             coords={
                 "init_time": [np.datetime64("2024-01-01T00:00")],
-                "step": [np.timedelta64(0, "h"), np.timedelta64(57, "h")], # 57 hours should fail
+                "step": [np.timedelta64(0, "h"), np.timedelta64(85, "h")], # 85 hours should fail
                 "latitude": [52.0, 51.0],
                 "longitude": [4.0, 5.0],
             },
         )
         with self.assertRaises(SchemaError):
-            EcmwfLiveNlSchema.validate(ds)
+            EcmwfLiveSchema.validate(ds)
 
 
 if __name__ == '__main__':
