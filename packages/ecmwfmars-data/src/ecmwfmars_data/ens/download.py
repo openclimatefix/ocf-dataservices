@@ -133,6 +133,9 @@ def _transform(ds: xr.Dataset) -> xr.Dataset:
     for var in ds.data_vars:
         ds[var] = ds[var].astype(np.float32)
 
+    if "ensemble_member" in ds.coords:
+        ds["ensemble_member"] = ds["ensemble_member"].astype(np.int16)
+
     # Reorder dimensions exactly as required by the schema, and drop any variables not in the
     # schema (like 'surface').
     return enforce_dim_order(ds, MarsEcmwfEnsSchema.dims(), keep_vars=list(var_mapping.values()))
