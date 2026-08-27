@@ -62,7 +62,7 @@ class TestDownload(unittest.TestCase):
             # time scalar (default cfgrib behavior for single init time)
             time_coord = np.datetime64("2023-01-01T00:00:00")
             step = np.array([np.timedelta64(0, 'h'), np.timedelta64(3, 'h'), np.timedelta64(6, 'h')])
-            number = np.array([1, 2], dtype=np.int16)
+            number = np.array([1, 2], dtype=np.int64)
             latitude = np.array([55.0, 54.0])
             longitude = np.array([-5.0, -4.0])
             
