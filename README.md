@@ -36,7 +36,7 @@ Current data modules:
 |---|---|---|
 | `dynamical-data` | [Dynamical.org](https://dynamical.org)'s public Zarr archive | ECMWF ENS |
 | `ecmwfmars-data` | ECMWF's MARS API | ECMWF ENS |
-| `ecmwflive-data` | ECMWF's real-time GRIB dissemination (S3) | ECMWF HRES/ENS live, UK/India/NL |
+| `ecmwflive-data` | ECMWF's real-time GRIB dissemination (S3) | ECMWF HRES/ENS live, west-europe/India |
 
 ## Asset tiers: L0 / L1 / L2
 
@@ -97,8 +97,7 @@ Real examples of this split:
 
 - `dynamical_data.ecmwf_ens.download`: `_compute` → `_to_dataset` → `download`
 - `ecmwfmars_data.ens.download`: `_read_raw_grib` → `_transform` → `convert_to_dataset`
-- `ecmwflive_data.processing`: `_read_raw_grib` → `_transform` → `process_ecmwf_live_uk_india` /
-  `process_ecmwf_live_nl`
+- `ecmwflive_data.processing`: `_read_raw_grib` → `_transform` → `process_ecmwf_live_validated`
 
 ### `schema.py`
 
