@@ -28,7 +28,12 @@ from schemas.nwp_variables import (
 
 class EcmwfLiveSchema(NwpDatasetSchema):
     _chunks: ClassVar[dict[str, int]] = {"init_time": 1, "step": 1, "latitude": -1, "longitude": -1}
-    _shards: ClassVar[dict[str, int]] = {"init_time": 1, "step": -1, "latitude": -1, "longitude": -1}
+    _shards: ClassVar[dict[str, int]] = {
+        "init_time": 1,
+        "step": -1,
+        "latitude": -1,
+        "longitude": -1,
+    }
 
     _dims = ("init_time", "step", "latitude", "longitude")
 
@@ -53,9 +58,15 @@ class EcmwfLiveSchema(NwpDatasetSchema):
     medium_cloud_cover: np.float32 = medium_cloud_cover(dims=_dims, nullable=False)
     total_precipitation_rate: np.float32 = total_precipitation_rate(dims=_dims, nullable=True)
     snow_depth: np.float32 = snow_depth(dims=_dims, nullable=True)
-    downward_long_wave_radiation_flux_surface: np.float32 = downward_long_wave_radiation_flux_surface(dims=_dims, nullable=True)
-    downward_short_wave_radiation_flux_surface: np.float32 = downward_short_wave_radiation_flux_surface(dims=_dims, nullable=True)
-    total_cloud_cover_atmosphere: np.float32 = total_cloud_cover_atmosphere(dims=_dims, nullable=False)
+    downward_long_wave_radiation_flux_surface: np.float32 = (
+        downward_long_wave_radiation_flux_surface(dims=_dims, nullable=True)
+    )
+    downward_short_wave_radiation_flux_surface: np.float32 = (
+        downward_short_wave_radiation_flux_surface(dims=_dims, nullable=True)
+    )
+    total_cloud_cover_atmosphere: np.float32 = total_cloud_cover_atmosphere(
+        dims=_dims, nullable=False
+    )
     visibility: np.float32 = visibility(dims=_dims, nullable=True)
 
     class Config(NwpDatasetSchema.Config):

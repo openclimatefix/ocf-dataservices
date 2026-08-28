@@ -19,14 +19,20 @@ def _describe_null_variables(ds: xr.Dataset) -> str | None:
         if bool(data_array.isnull().any()):
             null_count = int(data_array.isnull().sum().item())
             total_count = int(data_array.size)
-            null_vars.append(f"{var_name} ({null_count}/{total_count} NaNs, {null_count / total_count:.1%})")
+            null_vars.append(
+                f"{var_name} ({null_count}/{total_count} NaNs, {null_count / total_count:.1%})"
+            )
 
     if not null_vars:
         return None
-    return "Validation failed. The following variables contain null values:\n" + "\n".join(null_vars)
+    return "Validation failed. The following variables contain null values:\n" + "\n".join(
+        null_vars
+    )
 
 
-def validates(schema: type[pa.DatasetModel]) -> Callable[[Callable[P, xr.Dataset]], Callable[P, xr.Dataset]]:
+def validates(
+    schema: type[pa.DatasetModel],
+) -> Callable[[Callable[P, xr.Dataset]], Callable[P, xr.Dataset]]:
     """Decorator that validates a function's returned Dataset against `schema` before returning it.
 
     Applying this at a provider package's public entrypoint (its download/convert/process function)

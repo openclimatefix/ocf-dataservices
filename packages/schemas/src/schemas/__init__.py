@@ -19,11 +19,14 @@ from .nwp_coordinates import (
 from .nwp_coordinates import (
     step as step,
 )
-from .nwp_variables import (
-    categorical_precipitation_type_surface as categorical_precipitation_type_surface,
+from .nwp_coordinates import (
+    x_laea as x_laea,
+)
+from .nwp_coordinates import (
+    y_laea as y_laea,
 )
 from .nwp_variables import (
-    dew_point_temperature_2m as dew_point_temperature_2m,
+    categorical_precipitation_type_surface as categorical_precipitation_type_surface,
 )
 from .nwp_variables import (
     downward_long_wave_radiation_flux_surface as downward_long_wave_radiation_flux_surface,
@@ -47,10 +50,28 @@ from .nwp_variables import (
     pressure_reduced_to_mean_sea_level as pressure_reduced_to_mean_sea_level,
 )
 from .nwp_variables import (
+    relative_humidity_2m as relative_humidity_2m,
+)
+from .nwp_variables import (
+    snow_depth as snow_depth,
+)
+from .nwp_variables import (
     temperature_2m as temperature_2m,
 )
 from .nwp_variables import (
     total_cloud_cover_atmosphere as total_cloud_cover_atmosphere,
+)
+from .nwp_variables import (
+    total_precipitation_rate as total_precipitation_rate,
+)
+from .nwp_variables import (
+    visibility as visibility,
+)
+from .nwp_variables import (
+    wind_direction_10m as wind_direction_10m,
+)
+from .nwp_variables import (
+    wind_speed_10m as wind_speed_10m,
 )
 from .nwp_variables import (
     wind_u_10m as wind_u_10m,
@@ -71,7 +92,6 @@ from .validation import (
 __all__ = [
     "NwpDatasetSchema",
     "categorical_precipitation_type_surface",
-    "dew_point_temperature_2m",
     "downward_long_wave_radiation_flux_surface",
     "downward_short_wave_radiation_flux_surface",
     "enforce_dim_order",
@@ -84,12 +104,20 @@ __all__ = [
     "medium_cloud_cover",
     "precipitation_surface",
     "pressure_reduced_to_mean_sea_level",
+    "relative_humidity_2m",
+    "snow_depth",
     "step",
     "temperature_2m",
     "total_cloud_cover_atmosphere",
+    "total_precipitation_rate",
     "validates",
+    "visibility",
+    "wind_direction_10m",
+    "wind_speed_10m",
     "wind_u_10m",
     "wind_u_100m",
     "wind_v_10m",
     "wind_v_100m",
+    "x_laea",
+    "y_laea",
 ]

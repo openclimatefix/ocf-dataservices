@@ -9,7 +9,7 @@ from schemas.validation import validates
 from .schema import EcmwfLiveSchema
 
 
-def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:
+def _read_raw_grib(grib_path: Path | str, bbox_nwse: list[float]) -> xr.Dataset:
     """Read raw ECMWF Live GRIB data into an Xarray Dataset with its original variable/coord names."""
     # Open using cfgrib with ignore_keys to prevent DatasetBuildError
     # from conflicting vertical levels and stepTypes.
@@ -20,7 +20,14 @@ def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:
             grib_path,
             backend_kwargs={
                 "indexpath": "",
-                "ignore_keys": ["valid_time", "stepType", "typeOfLevel", "surface", "heightAboveGround", "meanSea"],
+                "ignore_keys": [
+                    "valid_time",
+                    "stepType",
+                    "typeOfLevel",
+                    "surface",
+                    "heightAboveGround",
+                    "meanSea",
+                ],
             },
         )
     except Exception as e:
@@ -32,34 +39,44 @@ def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:
     # The GRIB files contain fields on different grids (global vs subsets).
     # We want to merge fields that share the same lat/lon grid.
     # A safe heuristic is to merge everything on the largest grid or keep them separate.
-    # Since ECMWF Live contains subsets with different `numberOfPoints`, we filter the datasets 
+    # Since ECMWF Live contains subsets with different `numberOfPoints`, we filter the datasets
     # to find the ones with both `latitude` and `longitude` coords, and merge them.
     valid_datasets = [
-        d for d in datasets 
-        if "latitude" in d.coords and "longitude" in d.coords and d.latitude.ndim == 1 and d.longitude.ndim == 1
+        d
+        for d in datasets
+        if "latitude" in d.coords
+        and "longitude" in d.coords
+        and d.latitude.ndim == 1
+        and d.longitude.ndim == 1
     ]
 
     if not valid_datasets:
         raise ValueError(f"No regular lat/lon grid datasets found in {grib_path}")
 
-    # Usually there is only one dominant grid resolution containing the fields we need.
-    # We group datasets by their lat/lon shapes and merge within the group that has the most variables.
-    # For now, let's merge everything on the same grid shape.
-    grid_shapes = {}
+    # Filter to only datasets that overlap with the target bounding box
+    n, w, s, e = bbox_nwse
+    overlapping = []
     for d in valid_datasets:
-        shape = (len(d.latitude), len(d.longitude))
-        if shape not in grid_shapes:
-            grid_shapes[shape] = []
-        grid_shapes[shape].append(d)
+        lon = d.longitude
+        # Handle potential 0-360 wrap for the check
+        if float(lon.max()) > 180:
+            lon = ((lon + 180) % 360) - 180
 
-    # Pick the grid shape that has the most data variables (the primary forecast data)
-    best_shape = max(grid_shapes.keys(), key=lambda s: sum(len(d.data_vars) for d in grid_shapes[s]))
-    
-    ds = xr.merge(grid_shapes[best_shape], compat="override")
+        lat_min, lat_max = float(d.latitude.min()), float(d.latitude.max())
+        lon_min, lon_max = float(lon.min()), float(lon.max())
 
-    # Drop the 'number' scalar coordinate that cfgrib automatically adds for ECMWF data.
-    # The schemas do not expect it.
-    return ds.drop_vars(["number"], errors="ignore")
+        # Check overlap (n=max_lat, s=min_lat, w=min_lon, e=max_lon)
+        if lat_min <= n and lat_max >= s and lon_min <= e and lon_max >= w:
+            overlapping.append(d)
+
+    if not overlapping:
+        raise ValueError(f"No grid datasets overlap the target bbox {bbox_nwse} in {grib_path}")
+
+    ds = xr.merge(overlapping, compat="override")
+
+    # The schemas do not expect extra scalar coordinates that cfgrib automatically adds
+    # (like 'number', 'level', etc.), but we strip them globally in _transform rather than here.
+    return ds
 
 
 def _transform(
@@ -73,11 +90,11 @@ def _transform(
     if "longitude" in ds.coords and ds.longitude.max() > 180:
         ds = ds.assign_coords(longitude=(((ds.longitude + 180) % 360) - 180))
         ds = ds.sortby("longitude")
-        
+
     # bbox_nwse is North, West, South, East
     n, w, s, e = bbox_nwse
     ds = ds.sel(latitude=slice(n, s), longitude=slice(w, e))
-    
+
     # Time slicing - strictly truncate to max_step_hours to remove non-hourly jumps
     if "step" in ds.coords:
         max_step = np.timedelta64(max_step_hours, "h")
@@ -120,7 +137,7 @@ def _transform(
         "tcc": "total_cloud_cover_atmosphere",
         "vis": "visibility",
     }
-    
+
     rename_vars = {k: v for k, v in var_mapping.items() if k in ds.data_vars}
     ds = ds.rename(rename_vars)
 
@@ -128,7 +145,12 @@ def _transform(
     if "temperature_2m" in ds.data_vars:
         ds["temperature_2m"] = ds["temperature_2m"] - 273.15
 
-    for cloud_var in ["high_cloud_cover", "medium_cloud_cover", "low_cloud_cover", "total_cloud_cover_atmosphere"]:
+    for cloud_var in [
+        "high_cloud_cover",
+        "medium_cloud_cover",
+        "low_cloud_cover",
+        "total_cloud_cover_atmosphere",
+    ]:
         if cloud_var in ds.data_vars and ds[cloud_var].max() <= 1.0:
             ds[cloud_var] = ds[cloud_var] * 100.0
 
@@ -143,21 +165,21 @@ def _transform(
         "uv_b_radiation",
     ]
     present_rad_vars = [v for v in rad_vars if v in ds.data_vars]
-    
+
     if present_rad_vars:
         # Duration of each step interval in seconds (step[i+1] - step[i])
         dt = (ds.step.shift(step=-1) - ds.step).dt.total_seconds()
-        
+
         for rad_var in present_rad_vars:
             # Forward difference: Accumulation(T+dt) - Accumulation(T)
             diff_var = ds[rad_var].shift(step=-1) - ds[rad_var]
-            
+
             # Convert J m-2 to W m-2
             flux = diff_var / dt
-            
+
             # Clip negative numerical noise
             ds[rad_var] = np.clip(flux, a_min=0, a_max=None)
-            
+
         # The forward difference leaves the last step as NaN. We drop it.
         ds = ds.isel(step=slice(0, -1))
 
@@ -165,6 +187,12 @@ def _transform(
         ds[var] = ds[var].astype(np.float32)
 
     ordered_dims = ("init_time", "step", "latitude", "longitude")
+
+    # Drop any extra coordinates (like 'level', 'surface', etc.) that cfgrib might have added.
+    extra_coords = [c for c in ds.coords if c not in ordered_dims]
+    if extra_coords:
+        ds = ds.drop_vars(extra_coords, errors="ignore")
+
     schema_vars = list(set(var_mapping.values()))
     return enforce_dim_order(ds, ordered_dims, keep_vars=schema_vars)
 
@@ -181,7 +209,7 @@ def process_ecmwf_live(
     :func:`process_ecmwf_live_validated`, which wraps this function and validates the result
     against :class:`EcmwfLiveSchema`.
     """
-    ds = _read_raw_grib(grib_path)
+    ds = _read_raw_grib(grib_path, bbox_nwse=bbox_nwse)
     return _transform(ds, bbox_nwse=bbox_nwse, max_step_hours=max_step_hours)
 
 
@@ -192,4 +220,6 @@ def process_ecmwf_live_validated(
     max_step_hours: int,
 ) -> xr.Dataset:
     """Process raw ECMWF Live GRIB data for a region, validated against EcmwfLiveSchema."""
-    return process_ecmwf_live(grib_path=grib_path, bbox_nwse=bbox_nwse, max_step_hours=max_step_hours)
+    return process_ecmwf_live(
+        grib_path=grib_path, bbox_nwse=bbox_nwse, max_step_hours=max_step_hours
+    )

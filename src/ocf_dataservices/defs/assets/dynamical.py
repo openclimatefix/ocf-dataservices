@@ -11,7 +11,7 @@ ecmwf_ens_partitions = dg.TimeWindowPartitionsDefinition(
     start="2024-04-01T00:00",
     timezone="UTC",
     fmt="%Y-%m-%dT%H:%M",
-    end_offset=2, # Delay keys by 2 intervals (~12 hours) to match availability lag
+    end_offset=2,  # Delay keys by 2 intervals (~12 hours) to match availability lag
 )
 """One partition per 6-hourly ECMWF ENS run (00Z, 06Z, 12Z, 18Z). ``end_offset=2`` allows data time to land."""
 
@@ -22,6 +22,7 @@ _ECMWF_ENS_MAX_RETRIES: Final[int] = 8
 
 _ECMWF_ENS_RETRY_DELAY_SECONDS: Final[int] = 1800
 """How long to wait between retries of a not-yet-published ECMWF run."""
+
 
 @dg.asset(
     key_prefix="nwp",
@@ -50,7 +51,9 @@ def l1_dynamical_ecmwf_ens_uk_v1(context: dg.AssetExecutionContext) -> dg.Output
         partition_key,
     )
     if existing_partition is not None:
-        context.log.info(f"Data for partition {partition_key} already exists in Icechunk. Skipping download.")
+        context.log.info(
+            f"Data for partition {partition_key} already exists in Icechunk. Skipping download."
+        )
         return dg.Output(existing_partition, metadata={"status": "skipped"})
 
     start_time = time.perf_counter()

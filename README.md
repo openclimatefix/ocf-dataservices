@@ -37,6 +37,7 @@ Current data modules:
 | `dynamical-data` | [Dynamical.org](https://dynamical.org)'s public Zarr archive | ECMWF ENS |
 | `ecmwfmars-data` | ECMWF's MARS API | ECMWF ENS |
 | `ecmwflive-data` | ECMWF's real-time GRIB dissemination (S3) | ECMWF HRES/ENS live, west-europe/India |
+| `metoffice-data` | MetOffice Weather DataHub order API | UM global (west-europe/India), UKV |
 
 ## Asset tiers: L0 / L1 / L2
 
@@ -98,6 +99,8 @@ Real examples of this split:
 - `dynamical_data.ecmwf_ens.download`: `_compute` → `_to_dataset` → `download`
 - `ecmwfmars_data.ens.download`: `_read_raw_grib` → `_transform` → `convert_to_dataset`
 - `ecmwflive_data.processing`: `_read_raw_grib` → `_transform` → `process_ecmwf_live_validated`
+- `metoffice_data.processing`: `_read_raw_grib` → `_transform` → `process_metoffice_westeurope` /
+  `process_metoffice_india` / `process_metoffice_ukv`
 
 ### `schema.py`
 
@@ -161,7 +164,7 @@ To deploy on a server:
 2. Create `/etc/dagster/.env` with the variables the pipelines need (`L0_ROOT_PATH`,
    `L1_ROOT_PATH`, `L2_ROOT_PATH`, `ECMWF_API_KEY`, `ECMWF_API_EMAIL`, `ECMWF_API_URL`,
    `ECMWF_REALTIME_S3_BUCKET`, `ECMWF_REALTIME_S3_ACCESS_KEY`, `ECMWF_REALTIME_S3_ACCESS_SECRET`,
-   plus any added per the "Adding a new data module" checklist above). This file is loaded three
+   `METOFFICE_API_KEY`, plus any added per the "Adding a new data module" checklist above). This file is loaded three
    ways: as `env_file:` for the three core services, for Postgres credential substitution in the
    compose file itself, and — mounted read-only into every launched run container — via the
    `secrets: EnvFileLoader` configured in the embedded `dagster.yaml`, so new variables only need

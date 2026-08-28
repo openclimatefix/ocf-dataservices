@@ -22,22 +22,20 @@ class TestProcessing(unittest.TestCase):
             },
         )
 
-        with patch('cfgrib.open_datasets') as mock_open:
+        with patch("cfgrib.open_datasets") as mock_open:
             # Mock open return
             mock_open.return_value = [ds]
-            
+
             # Max step is 84
             out_ds = process_ecmwf_live(
-                grib_path="dummy.grib",
-                bbox_nwse=[53, 3, 50, 6],
-                max_step_hours=84
+                grib_path="dummy.grib", bbox_nwse=[53, 3, 50, 6], max_step_hours=84
             )
-            
+
             self.assertIn("step", out_ds.coords)
             # 96h should be dropped
             self.assertNotIn(np.timedelta64(96, "h"), out_ds.step.values)
             self.assertIn(np.timedelta64(84, "h"), out_ds.step.values)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

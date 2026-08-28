@@ -28,6 +28,7 @@ dependencies = [
     "dynamical-data",
     "schemas",
     "ecmwflive-data",
+    "metoffice-data",
     "pandera>=0.32.1",
     "xarray>=2026.7.0",
 ]
@@ -59,6 +60,7 @@ ecmwfmars-data = { workspace = true }
 dynamical-data = { workspace = true }
 schemas = { workspace = true }
 ecmwflive-data = { workspace = true }
+metoffice-data = { workspace = true }
 
 
 [tool.hatch.build.targets.wheel]

@@ -1,6 +1,7 @@
 """
 ECMWF MARS API Client, adapted from the original.
 """
+
 import dataclasses
 import datetime as dt
 import json
@@ -17,6 +18,10 @@ logger = logging.getLogger(__name__)
 
 
 class APIException(Exception):
+    pass
+
+
+class MarsQueueLimitError(APIException):
     pass
 
 
@@ -165,10 +170,16 @@ class MarsClient:
             try:
                 return self._do_call(method, url, payload)
             except urllib.error.HTTPError as e:
+                body = e.read().decode("utf-8", errors="replace")
+                if e.code == 400 and ("too many" in body.lower() or "queued" in body.lower()):
+                    raise MarsQueueLimitError(f"MARS queue full: {body}")
+
                 if e.code == 429 or e.code >= 500:
-                    logger.warning(f"HTTP {e.code} received. Retrying in {delay} seconds...")
+                    logger.warning(
+                        f"HTTP {e.code} received (body: {body}). Retrying in {delay} seconds..."
+                    )
                 else:
-                    raise APIException(f"HTTP Error {e.code}: {e.read().decode('utf-8', errors='replace')}")
+                    raise APIException(f"HTTP Error {e.code}: {body}")
             except (urllib.error.URLError, ConnectionError) as e:
                 logger.warning(f"Network error: {e}. Retrying in {delay} seconds...")
 
@@ -222,11 +233,11 @@ class MarsClient:
     def execute(self, request: dict[str, Any] | MarsRequest, target: BinaryIO) -> dict[str, Any]:
         """
         Executes a MARS request and writes the downloaded data to `target`.
-        
+
         Args:
             request: A MarsRequest helper object or dictionary outlining the parameters for MARS.
             target: A binary IO stream (like io.BytesIO() or an open file object).
-            
+
         Returns:
             The final API response dictionary.
         """
@@ -261,14 +272,16 @@ class MarsClient:
             result_href = result_obj.get("href")
 
             if not result_href:
-                raise APIException(f"Status is 'complete', but no result href was returned. Response: {response}")
+                raise APIException(
+                    f"Status is 'complete', but no result href was returned. Response: {response}"
+                )
 
             download_url = urllib.parse.urljoin(self.url, result_href)
             expected_size = result_obj.get("size", 0)
 
             self._download(download_url, target, expected_size)
         finally:
-            # Clean up by telling the API to delete the request 
+            # Clean up by telling the API to delete the request
             try:
                 self._call("DELETE", poll_url)
             except APIException as e:
@@ -292,4 +305,6 @@ class MarsClient:
                 bytes_transferred += len(chunk)
 
         if expected_size and bytes_transferred != expected_size:
-            logger.warning(f"WARNING: Expected {expected_size} bytes, but transferred {bytes_transferred} bytes.")
+            logger.warning(
+                f"WARNING: Expected {expected_size} bytes, but transferred {bytes_transferred} bytes."
+            )
