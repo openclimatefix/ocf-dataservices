@@ -98,18 +98,16 @@ def _transform(ds: xr.Dataset) -> xr.Dataset:
     ds = ds.rename(rename_vars)
 
     # Unit conversions
-    # Temperature: Kelvin to Celsius
     if "temperature_2m" in ds.data_vars:
-        ds["temperature_2m"] = ds["temperature_2m"] - 273.15
+        ds["temperature_2m"] = ds["temperature_2m"] - 273.15  # K -> °C
 
-    # Radiation: J m-2 (accumulated over time) to W m-2
     # ECMWF MARS radiation steps are accumulated since the start of the forecast.
-    # We apply a forward difference to extract the accumulation over each step interval,
+    # Apply a forward difference to extract the accumulation over each step interval,
     # then divide by the interval duration in seconds to convert J m-2 to W m-2.
+    # Taken from the existing forecast app.
     if "downward_short_wave_radiation_flux_surface" in ds.data_vars:
         rad_var = "downward_short_wave_radiation_flux_surface"
 
-        # Duration of each step interval in seconds (step[i+1] - step[i])
         dt = (ds.step.shift(step=-1) - ds.step).dt.total_seconds()
 
         # Forward difference: Accumulation(T+dt) - Accumulation(T)
@@ -124,10 +122,10 @@ def _transform(ds: xr.Dataset) -> xr.Dataset:
         # Drop the last step since its forward difference is NaN
         ds = ds.isel(step=slice(0, -1))
 
-    # Cloud covers: 0-1 fraction to percentage
     for cloud_var in ["high_cloud_cover", "medium_cloud_cover", "low_cloud_cover"]:
         if cloud_var in ds.data_vars:
-            ds[cloud_var] = ds[cloud_var] * 100
+            # Cloud cover gets clipped because GRIB packing can produce values slightly above 1
+            ds[cloud_var] = np.clip(ds[cloud_var] * 100, a_min=0, a_max=100)
 
     # Ensure all data variables are float32
     for var in ds.data_vars:
