@@ -1,0 +1,20 @@
+[project]
+name = "schemas"
+version = "0.1.0"
+description = "Shared schemas for ouput data"
+readme = "README.md"
+authors = [
+    { name = "Sol Cotton", email = "sol@openclimatefix.org" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "pandera[xarray]>=0.32.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = []
+
