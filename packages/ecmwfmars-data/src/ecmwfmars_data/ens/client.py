@@ -169,6 +169,8 @@ class MarsClient:
         for attempt in range(max_tries):
             try:
                 return self._do_call(method, url, payload)
+            except MarsQueueLimitError:
+                raise
             except urllib.error.HTTPError as e:
                 body = e.read().decode("utf-8", errors="replace")
                 if e.code == 400 and ("too many" in body.lower() or "queued" in body.lower()):
@@ -226,9 +228,55 @@ class MarsClient:
             response_json = {"error": f"Invalid JSON response: {body}"}
 
         if "error" in response_json:
-            raise APIException(f"API Error: {response_json['error']}")
+            error_msg = response_json["error"]
+            if code == 400 and ("too many" in str(error_msg).lower() or "queued" in str(error_msg).lower()):
+                raise MarsQueueLimitError(f"MARS queue full: {error_msg}")
+            raise APIException(f"API Error: {error_msg}")
 
         return code, response_json, location, retry_after
+
+    def submit(self, request: dict[str, Any] | MarsRequest) -> str:
+        """
+        Submits a MARS request and returns the poll URL.
+        """
+        if isinstance(request, MarsRequest):
+            request = request.to_dict()
+
+        endpoint = urllib.parse.urljoin(self.url, "services/mars/requests")
+        _code, _response, location, _ = self._call("POST", endpoint, request)
+
+        if location:
+            return urllib.parse.urljoin(endpoint, location)
+        return endpoint
+
+    def status(self, poll_url: str) -> tuple[str, dict[str, Any]]:
+        """
+        Checks the status of a MARS request.
+        Returns a tuple of (status_string, full_response_dict).
+        """
+        _code, response, _new_location, _ = self._call("GET", poll_url)
+        # Handle 303 Redirect representing completion
+        if _code == 303:
+            return "complete", response
+
+        status = response.get("status", "unknown")
+        return status, response
+
+    def cleanup(self, poll_url: str) -> None:
+        """
+        Deletes a request from MARS.
+        """
+        try:
+            self._call("DELETE", poll_url)
+        except APIException as e:
+            logger.debug(f"Failed to cleanup request {poll_url}: {e}")
+
+    def download_result(self, result_href: str, target: BinaryIO, expected_size: int = 0) -> None:
+        """
+        Downloads completed result from href to target.
+        """
+        download_url = urllib.parse.urljoin(self.url, result_href)
+        self._download(download_url, target, expected_size)
 
     def execute(self, request: dict[str, Any] | MarsRequest, target: BinaryIO) -> dict[str, Any]:
         """

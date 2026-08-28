@@ -2,12 +2,13 @@ import os
 import random
 import tempfile
 import time
+import urllib.error
 from pathlib import Path
 
 import dagster as dg
 import xarray as xr
-from ecmwfmars_data.ens.client import MarsQueueLimitError
-from ecmwfmars_data.ens.download import convert_to_dataset, download_raw
+from ecmwfmars_data.ens.client import APIException, MarsQueueLimitError, MarsRequest
+from ecmwfmars_data.ens.download import convert_to_dataset
 from ecmwfmars_data.ens.schema import MarsEcmwfEnsSchema
 
 from ocf_dataservices.defs.assets.dynamical import ecmwf_ens_partitions
@@ -48,21 +49,85 @@ def l0_mars_ecmwf_ens_uk_v1(
 
     target_path = Path(temp_path)
 
-    context.log.info(f"Downloading MARS ENS data for {nwp_init_time} to {target_path}")
-
     start_time = time.perf_counter()
+
+    # Use a deterministic path for the .url file in the shared L0 storage so retries can find it
+    # We fetch L0_ROOT_PATH directly from the environment variables configured by Dagster
+    l0_base_path = Path(os.environ.get("L0_ROOT_PATH", "/tmp/dagster_storage"))
+    url_dir = l0_base_path / "nwp" / "l0_mars_ecmwf_ens_uk_v1" / "_mars_urls"
+    url_dir.mkdir(parents=True, exist_ok=True)
+    url_file_path = url_dir / f"{partition_key.replace(':', '')}.url"
+    
+    poll_url = None
+
+    if url_file_path.exists():
+        poll_url = url_file_path.read_text().strip()
+        context.log.info(f"Found existing poll URL: {poll_url}")
+
+    if not poll_url:
+        try:
+            req = MarsRequest.ens(
+                params=["167", "169", "186", "187", "188"],
+                init_time=nwp_init_time,
+                steps=metadata["steps"],
+                bbox_nwse=metadata["bbox_nwse"],
+                number=metadata["numbers"],
+            )
+            context.log.info(f"Submitting new MARS request for {nwp_init_time}")
+            poll_url = client.submit(req)
+            url_file_path.write_text(poll_url)
+            context.log.info(f"Submitted new MARS request. Poll URL: {poll_url}")
+            
+            # Yield slot immediately. Poll after 5 minutes initially.
+            raise dg.RetryRequested(max_retries=1000, seconds_to_wait=300)
+        except MarsQueueLimitError as e:
+            context.log.warning(f"MARS queue full on submit. Retrying later. Error: {e}")
+            raise dg.RetryRequested(max_retries=1000, seconds_to_wait=random.randint(300, 600)) from e
+
     try:
-        download_raw(
-            client=client,
-            init_time=nwp_init_time,
-            bbox_nwse=metadata["bbox_nwse"],
-            steps=metadata["steps"],
-            numbers=metadata["numbers"],
-            target_path=target_path,
-        )
+        status, response = client.status(poll_url)
     except MarsQueueLimitError as e:
-        context.log.warning(f"MARS queue full. Retrying. Error: {e}")
-        raise dg.RetryRequested(max_retries=100, seconds_to_wait=random.randint(600, 720)) from e
+        context.log.warning(f"MARS queue full evaluated during status check: {e}. Deleting MARS job and retrying later.")
+        url_file_path.unlink(missing_ok=True)
+        # Start over on next retry with jitter
+        raise dg.RetryRequested(max_retries=1000, seconds_to_wait=random.randint(300, 600)) from e
+    except (APIException, urllib.error.URLError, ConnectionError) as e:
+        context.log.error(f"Network or API error while checking status for {poll_url}: {e}. Resetting request.")
+        url_file_path.unlink(missing_ok=True)
+        raise dg.RetryRequested(max_retries=1000, seconds_to_wait=300)
+
+    context.log.info(f"MARS request status: {status}")
+
+    if status in ("queued", "active"):
+        raise dg.RetryRequested(max_retries=1000, seconds_to_wait=300)
+
+    if status != "complete":
+        context.log.warning(f"MARS job not complete. Status is '{status}'. Response: {response}. Deleting MARS job and retrying later.")
+        url_file_path.unlink(missing_ok=True)
+        try:
+            client.cleanup(poll_url)
+        except (APIException, urllib.error.URLError, ConnectionError):
+            pass
+        
+        # If rejected (often due to queue limits evaluated async), back off with jitter
+        raise dg.RetryRequested(max_retries=1000, seconds_to_wait=random.randint(300, 600))
+
+    context.log.info("MARS request complete. Downloading data.")
+    result_obj = response if "href" in response else response.get("result", {})
+    result_href = result_obj.get("href")
+
+    if not result_href:
+        url_file_path.unlink(missing_ok=True)
+        raise RuntimeError(f"Status is 'complete' but no href in response: {response}")
+
+    expected_size = result_obj.get("size", 0)
+
+    try:
+        with open(target_path, "wb") as f:
+            client.download_result(result_href, f, expected_size)
+    finally:
+        client.cleanup(poll_url)
+        url_file_path.unlink(missing_ok=True)
 
     elapsed_time = time.perf_counter() - start_time
 
