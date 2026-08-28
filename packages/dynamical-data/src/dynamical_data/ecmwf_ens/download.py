@@ -17,7 +17,6 @@ class NwpRunNotYetAvailable(Exception):
 
 _ECMWF_ENS_VARS_TO_DOWNLOAD: Final[tuple[str, ...]] = (
     "temperature_2m",
-    "dew_point_temperature_2m",
     "wind_u_10m",
     "wind_v_10m",
     "wind_u_100m",
@@ -32,8 +31,7 @@ _ECMWF_ENS_VARS_TO_DOWNLOAD: Final[tuple[str, ...]] = (
 
 
 def open_it(
-    nwp_init_time: dt.datetime,
-    bbox_nwse: tuple[float, float, float, float] = (90, 180, -90, -180)
+    nwp_init_time: dt.datetime, bbox_nwse: tuple[float, float, float, float] = (90, 180, -90, -180)
 ) -> xr.Dataset:
     """Lazily open the ECMWF ENS Icechunk store for a given init time.
 
@@ -84,11 +82,11 @@ def open_it(
     # This prevents downstream KeyErrors during DataFrame conversion.
     if ds_sliced.longitude.size == 0 or ds_sliced.latitude.size == 0:
         raise ValueError(
-            "No spatial overlap found between bounding box and NWP dataset. " + \
-            f"Dataset covers ({ds.latitude.max().item()}, {ds.longitude.min().item()}, " + \
-            f"{ds.latitude.min().item()}, {ds.longitude.max().item()}); " + \
-            f"Bounding box is {bbox_nwse}. " + \
-            f"{ds_sliced=}"
+            "No spatial overlap found between bounding box and NWP dataset. "
+            + f"Dataset covers ({ds.latitude.max().item()}, {ds.longitude.min().item()}, "
+            + f"{ds.latitude.min().item()}, {ds.longitude.max().item()}); "
+            + f"Bounding box is {bbox_nwse}. "
+            + f"{ds_sliced=}"
         )
 
     ds_sliced = ds_sliced.rename({"lead_time": "step"})
@@ -126,9 +124,7 @@ def _compute(ds_sliced: xr.Dataset) -> dict[str, xr.DataArray]:
     # though this hasn't been confirmed by pinning back to 2.0.6 and re-testing.
     data_arrays: dict[str, xr.DataArray] = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        futures = [
-            executor.submit(download_array, str(name)) for name in ds_sliced.data_vars
-        ]
+        futures = [executor.submit(download_array, str(name)) for name in ds_sliced.data_vars]
         for future in concurrent.futures.as_completed(futures):
             data_arrays.update(future.result())
 

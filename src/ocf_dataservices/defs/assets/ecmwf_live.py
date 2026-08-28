@@ -47,7 +47,7 @@ def ecmwf_live_s3_sensor(context: dg.SensorEvaluationContext) -> dg.SensorResult
             prefix=os.getenv("ECMWF_REALTIME_DISSEMINATION_FILE_PREFIX", "A2"),
             last_processed=last_processed,
         )
-    except Exception as e: # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
         context.log.error(str(e))
         return dg.SensorResult()
 

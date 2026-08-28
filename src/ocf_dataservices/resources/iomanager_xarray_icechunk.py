@@ -19,7 +19,9 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
     def _get_store_path(self, asset_key: dg.AssetKey) -> str:
         return "/".join([self.path] + list(asset_key.path))
 
-    def _get_repo(self, store_path: str, create_if_not_exists: bool = False) -> tuple[icechunk.Repository, bool]:
+    def _get_repo(
+        self, store_path: str, create_if_not_exists: bool = False
+    ) -> tuple[icechunk.Repository, bool]:
         result = re.match(
             r"^(?P<protocol>[\w]{2,6}):\/\/(?P<bucket>[\w-]+)\/(?P<prefix>[\w.\/-]+)$",
             store_path,
@@ -39,7 +41,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
                     raise ValueError(f"Unsupported storage protocol: {result.group('protocol')}")
         else:
             storage = icechunk.local_filesystem_storage(
-                    path=store_path,
+                path=store_path,
             )
 
         created: bool = False
@@ -56,11 +58,11 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
         return repo, created
 
     def existing_partition(
-            self,
-            asset_key: dg.AssetKey,
-            append_dim: str,
-            partition_key: str,
-        ) -> xr.Dataset | None:
+        self,
+        asset_key: dg.AssetKey,
+        append_dim: str,
+        partition_key: str,
+    ) -> xr.Dataset | None:
         """Gets a partition if it already exists, otherwise returns None."""
         store_path = self._get_store_path(asset_key)
         try:
@@ -95,8 +97,8 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
         for key, spec in (("chunks", schema._chunks), ("shards", schema._shards)):
             if list(obj.dims) != list(spec.keys()):
                 raise dg.DagsterInvariantViolationError(
-                    f"Dataset dimensions {list(obj.dims)} do not match supplied {key} keys " + \
-                    f"{list(spec.keys())}"
+                    f"Dataset dimensions {list(obj.dims)} do not match supplied {key} keys "
+                    + f"{list(spec.keys())}"
                 )
 
         keep_bits = metadata.get("keep_mantissa_bits", self.keep_mantissa_bits)
@@ -108,8 +110,8 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
                     if hasattr(da.data, "map_blocks"):
                         # Support Dask-backed datasets without computing them into memory
                         new_data = da.data.map_blocks(
-                            lambda x: np.bitwise_and(x.view(np.int32), mask).view(np.float32), 
-                            dtype=np.float32
+                            lambda x: np.bitwise_and(x.view(np.int32), mask).view(np.float32),
+                            dtype=np.float32,
                         )
                     else:
                         # In-memory NumPy datasets
@@ -145,46 +147,58 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
                 zarr_format=3,
                 mode="w-",
                 write_empty_chunks=False,
-                encoding={var: {
-                    "dtype": "float32",
-                    "chunks": tuple([
-                        obj.coords[k].size if v == -1 else v
-                        for k, v in schema._chunks.items()
-                    ]),
-                    "shards": tuple([
-                        obj.coords[k].size if v == -1 else v
-                        for k, v in schema._shards.items()
-                    ]),
-                    "compressors": zarr.codecs.BloscCodec(
-                        cname="zstd",
-                        clevel=3,
-                        shuffle="bitshuffle",
-                    ),
-                } for var in obj.data_vars} | {
-                    coord: {"chunks": 10000}
-                    for coord in obj.coords if coord not in obj.dims
-                } | {
+                encoding={
+                    var: {
+                        "dtype": "float32",
+                        "chunks": tuple(
+                            [
+                                obj.coords[k].size if v == -1 else v
+                                for k, v in schema._chunks.items()
+                            ]
+                        ),
+                        "shards": tuple(
+                            [
+                                obj.coords[k].size if v == -1 else v
+                                for k, v in schema._shards.items()
+                            ]
+                        ),
+                        "compressors": zarr.codecs.BloscCodec(
+                            cname="zstd",
+                            clevel=3,
+                            shuffle="bitshuffle",
+                        ),
+                    }
+                    for var in obj.data_vars
+                }
+                | {coord: {"chunks": 10000} for coord in obj.coords if coord not in obj.dims}
+                | {
                     schema.append_dim(): {
                         "dtype": int,
                         "units": "nanoseconds since 1970-01-01",
                         "calendar": "proleptic_gregorian",
                         "chunks": 10000,
                     }
-                }
+                },
             )
 
-        commit_hash = session.commit(f"dagster materialization: {context.asset_key} at {dt.datetime.now(dt.UTC)}")
+        commit_hash = session.commit(
+            f"dagster materialization: {context.asset_key} at {dt.datetime.now(dt.UTC)}"
+        )
 
         size_bytes = obj.nbytes
-        context.add_output_metadata({
-            "store_path": dg.MetadataValue.path(store_path),
-            "partition_key": context.partition_key if context.has_partition_key else "N/A",
-            "data_vars": list(obj.data_vars),
-            "dims": dict(obj.dims),
-            "icechunk_commit": dg.MetadataValue.text(str(commit_hash)),
-            "size_in_memory_bytes": dg.MetadataValue.int(size_bytes),
-            "size_human_readable": dg.MetadataValue.text(f"{size_bytes / (1024 * 1024):.2f} MB"),
-        })
+        context.add_output_metadata(
+            {
+                "store_path": dg.MetadataValue.path(store_path),
+                "partition_key": context.partition_key if context.has_partition_key else "N/A",
+                "data_vars": list(obj.data_vars),
+                "dims": dict(obj.dims),
+                "icechunk_commit": dg.MetadataValue.text(str(commit_hash)),
+                "size_in_memory_bytes": dg.MetadataValue.int(size_bytes),
+                "size_human_readable": dg.MetadataValue.text(
+                    f"{size_bytes / (1024 * 1024):.2f} MB"
+                ),
+            }
+        )
 
     def load_input(self, context: dg.InputContext) -> xr.Dataset:
         store_path = self._get_store_path(context.asset_key)
@@ -204,4 +218,3 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
             ds = ds.sel({append_dim: partition_key})
 
         return ds
-

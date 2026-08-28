@@ -12,6 +12,7 @@ members = [
     "dynamical-data",
     "ecmwflive-data",
     "ecmwfmars-data",
+    "metoffice-data",
     "ocf-dataservices",
     "schemas",
 ]
@@ -1551,6 +1552,25 @@ wheels = [
 ]
 
 [[package]]
+name = "metoffice-data"
+version = "0.1.0"
+source = { editable = "packages/metoffice-data" }
+dependencies = [
+    { name = "cfgrib" },
+    { name = "pandera" },
+    { name = "schemas" },
+    { name = "xarray" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cfgrib" },
+    { name = "pandera" },
+    { name = "schemas", editable = "packages/schemas" },
+    { name = "xarray" },
+]
+
+[[package]]
 name = "moto"
 version = "5.2.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1740,6 +1760,7 @@ dependencies = [
     { name = "ecmwflive-data" },
     { name = "ecmwfmars-data" },
     { name = "icechunk" },
+    { name = "metoffice-data" },
     { name = "pandera" },
     { name = "requests" },
     { name = "schemas" },
@@ -1767,6 +1788,7 @@ requires-dist = [
     { name = "ecmwflive-data", editable = "packages/ecmwflive-data" },
     { name = "ecmwfmars-data", editable = "packages/ecmwfmars-data" },
     { name = "icechunk", specifier = ">=2.1.1" },
+    { name = "metoffice-data", editable = "packages/metoffice-data" },
     { name = "pandera", specifier = ">=0.32.1" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "schemas", editable = "packages/schemas" },

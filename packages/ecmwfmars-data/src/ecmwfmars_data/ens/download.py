@@ -76,7 +76,7 @@ def _transform(ds: xr.Dataset) -> xr.Dataset:
         rename_coords["time"] = "init_time"
     if "number" in ds.coords:
         rename_coords["number"] = "ensemble_member"
-    
+
     if rename_coords:
         ds = ds.rename(rename_coords)
 
@@ -92,7 +92,7 @@ def _transform(ds: xr.Dataset) -> xr.Dataset:
         "mcc": "medium_cloud_cover",
         "lcc": "low_cloud_cover",
     }
-    
+
     # Rename variables present in the dataset
     rename_vars = {k: v for k, v in var_mapping.items() if k in ds.data_vars}
     ds = ds.rename(rename_vars)
@@ -108,19 +108,19 @@ def _transform(ds: xr.Dataset) -> xr.Dataset:
     # then divide by the interval duration in seconds to convert J m-2 to W m-2.
     if "downward_short_wave_radiation_flux_surface" in ds.data_vars:
         rad_var = "downward_short_wave_radiation_flux_surface"
-        
+
         # Duration of each step interval in seconds (step[i+1] - step[i])
         dt = (ds.step.shift(step=-1) - ds.step).dt.total_seconds()
-        
+
         # Forward difference: Accumulation(T+dt) - Accumulation(T)
         diff_var = ds[rad_var].shift(step=-1) - ds[rad_var]
-        
+
         # Convert J m-2 to W m-2
         flux = diff_var / dt
-        
+
         # Prevent negative values due to spectral ringing
         ds[rad_var] = np.clip(flux, a_min=0, a_max=None)
-        
+
         # Drop the last step since its forward difference is NaN
         ds = ds.isel(step=slice(0, -1))
 
@@ -136,9 +136,14 @@ def _transform(ds: xr.Dataset) -> xr.Dataset:
     if "ensemble_member" in ds.coords:
         ds["ensemble_member"] = ds["ensemble_member"].astype(np.int16)
 
+    ordered_dims = MarsEcmwfEnsSchema.dims()
+    extra_coords = [c for c in ds.coords if c not in ordered_dims]
+    if extra_coords:
+        ds = ds.drop_vars(extra_coords, errors="ignore")
+
     # Reorder dimensions exactly as required by the schema, and drop any variables not in the
     # schema (like 'surface').
-    return enforce_dim_order(ds, MarsEcmwfEnsSchema.dims(), keep_vars=list(var_mapping.values()))
+    return enforce_dim_order(ds, ordered_dims, keep_vars=list(var_mapping.values()))
 
 
 @validates(MarsEcmwfEnsSchema)

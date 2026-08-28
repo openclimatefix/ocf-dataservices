@@ -16,9 +16,13 @@ class RawFileIOManager(dg.ConfigurableIOManager):
 
         if context.has_partition_key:
             partition_key = context.partition_key
-            year = partition_key[:4] if len(partition_key) >= 4 and partition_key[:4].isdigit() else "unknown"
+            year = (
+                partition_key[:4]
+                if len(partition_key) >= 4 and partition_key[:4].isdigit()
+                else "unknown"
+            )
             # Colons are difficult characters for filenames across file systems (e.g. Windows)
-            # but we preserve them here if the string natively includes it, 
+            # but we preserve them here if the string natively includes it,
             # or optionally sanitize it: safe_key = partition_key.replace(":", "")
             return dir_path / year / f"{partition_key}.grib"
         else:
@@ -46,7 +50,9 @@ class RawFileIOManager(dg.ConfigurableIOManager):
             {
                 "storage_path": dg.MetadataValue.path(str(target_path)),
                 "size_bytes": dg.MetadataValue.int(size_bytes),
-                "size_human_readable": dg.MetadataValue.text(f"{size_bytes / (1024 * 1024):.2f} MB"),
+                "size_human_readable": dg.MetadataValue.text(
+                    f"{size_bytes / (1024 * 1024):.2f} MB"
+                ),
             }
         )
 

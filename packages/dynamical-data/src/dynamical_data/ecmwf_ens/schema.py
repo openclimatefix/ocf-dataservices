@@ -8,7 +8,6 @@ from schemas.base import NwpDatasetSchema
 from schemas.nwp_coordinates import ensemble_member, init_time, latitude, longitude, step
 from schemas.nwp_variables import (
     categorical_precipitation_type_surface,
-    dew_point_temperature_2m,
     downward_long_wave_radiation_flux_surface,
     downward_short_wave_radiation_flux_surface,
     precipitation_surface,
@@ -23,8 +22,20 @@ from schemas.nwp_variables import (
 
 
 class DynamicalEcmwfEnsSchema(NwpDatasetSchema):
-    _chunks: ClassVar[dict[str, int]] = {"init_time": 1, "step": 1, "ensemble_member": 1, "latitude": -1, "longitude": -1}
-    _shards: ClassVar[dict[str, int]] = {"init_time": 1, "step": -1, "ensemble_member": -1, "latitude": -1, "longitude": -1}
+    _chunks: ClassVar[dict[str, int]] = {
+        "init_time": 1,
+        "step": 1,
+        "ensemble_member": 1,
+        "latitude": -1,
+        "longitude": -1,
+    }
+    _shards: ClassVar[dict[str, int]] = {
+        "init_time": 1,
+        "step": -1,
+        "ensemble_member": -1,
+        "latitude": -1,
+        "longitude": -1,
+    }
 
     _dims = ("init_time", "step", "ensemble_member", "latitude", "longitude")
 
@@ -37,15 +48,24 @@ class DynamicalEcmwfEnsSchema(NwpDatasetSchema):
 
     # Variables
     temperature_2m: np.float32 = temperature_2m(dims=_dims, nullable=False)
-    dew_point_temperature_2m: np.float32 = dew_point_temperature_2m(dims=_dims, nullable=False)
     wind_u_100m: np.float32 = wind_u_100m(dims=_dims, nullable=False)
     wind_v_100m: np.float32 = wind_v_100m(dims=_dims, nullable=False)
-    pressure_reduced_to_mean_sea_level: np.float32 = pressure_reduced_to_mean_sea_level(dims=_dims, nullable=False)
-    total_cloud_cover_atmosphere: np.float32 = total_cloud_cover_atmosphere(dims=_dims, nullable=False)
-    downward_long_wave_radiation_flux_surface: np.float32 = downward_long_wave_radiation_flux_surface(dims=_dims, nullable=True)
-    downward_short_wave_radiation_flux_surface: np.float32 = downward_short_wave_radiation_flux_surface(dims=_dims, nullable=True)
+    pressure_reduced_to_mean_sea_level: np.float32 = pressure_reduced_to_mean_sea_level(
+        dims=_dims, nullable=False
+    )
+    total_cloud_cover_atmosphere: np.float32 = total_cloud_cover_atmosphere(
+        dims=_dims, nullable=False
+    )
+    downward_long_wave_radiation_flux_surface: np.float32 = (
+        downward_long_wave_radiation_flux_surface(dims=_dims, nullable=True)
+    )
+    downward_short_wave_radiation_flux_surface: np.float32 = (
+        downward_short_wave_radiation_flux_surface(dims=_dims, nullable=True)
+    )
     precipitation_surface: np.float32 = precipitation_surface(dims=_dims, nullable=True)
-    categorical_precipitation_type_surface: np.float32 = categorical_precipitation_type_surface(dims=_dims, nullable=True)
+    categorical_precipitation_type_surface: np.float32 = categorical_precipitation_type_surface(
+        dims=_dims, nullable=True
+    )
     wind_v_10m: np.float32 = wind_v_10m(dims=_dims, nullable=True)
     wind_u_10m: np.float32 = wind_u_10m(dims=_dims, nullable=True)
 
@@ -61,4 +81,4 @@ class DynamicalEcmwfEnsSchema(NwpDatasetSchema):
         return float(da.isnull().mean()) < 0.02
 
     class Config(NwpDatasetSchema.Config):
-        chunked = True # Ensures the dataset is chunked
+        chunked = True  # Ensures the dataset is chunked
