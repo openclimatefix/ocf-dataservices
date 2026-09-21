@@ -1,5 +1,8 @@
 import datetime as dt
+import fcntl
 import re
+from contextlib import contextmanager
+from pathlib import Path
 
 import dagster as dg
 import icechunk
@@ -122,68 +125,84 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
             obj = obj.map(apply_veltkamp, keep_attrs=True)
 
         store_path = self._get_store_path(context.asset_key)
-        repo, _was_created = self._get_repo(store_path, create_if_not_exists=True)
-        session = repo.writable_session(branch="main")
 
-        dataset_exists = False
-        try:
-            # Check if a valid zarr dataset actually exists in the store.
-            # (An icechunk repo might exist without a zarr dataset inside it if a previous run failed).
-            xr.open_zarr(session.store, consolidated=False)
-            dataset_exists = True
-        except Exception:  # noqa: BLE001
+        @contextmanager
+        def _local_write_lock(path: str):
+            if re.match(r"^[\w]{2,6}://", path):
+                yield
+                return
+            lock_path = Path(path).with_suffix(".lock")
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(lock_path, "w") as f:
+                fcntl.flock(f, fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(f, fcntl.LOCK_UN)
+
+        with _local_write_lock(store_path):
+            repo, _was_created = self._get_repo(store_path, create_if_not_exists=True)
+            session = repo.writable_session(branch="main")
+    
             dataset_exists = False
-
-        if context.has_partition_key and dataset_exists:
-            obj.to_zarr(
-                session.store,
-                mode="a",
-                append_dim=schema.append_dim(),
-                write_empty_chunks=False,
-            )
-        else:
-            obj.to_zarr(
-                session.store,
-                zarr_format=3,
-                mode="w-",
-                write_empty_chunks=False,
-                encoding={
-                    var: {
-                        "dtype": "float32",
-                        "chunks": tuple(
-                            [
-                                obj.coords[k].size if v == -1 else v
-                                for k, v in schema._chunks.items()
-                            ]
-                        ),
-                        "shards": tuple(
-                            [
-                                obj.coords[k].size if v == -1 else v
-                                for k, v in schema._shards.items()
-                            ]
-                        ),
-                        "compressors": zarr.codecs.BloscCodec(
-                            cname="zstd",
-                            clevel=3,
-                            shuffle="bitshuffle",
-                        ),
+            try:
+                # Check if a valid zarr dataset actually exists in the store.
+                # (An icechunk repo might exist without a zarr dataset inside it if a previous run failed).
+                xr.open_zarr(session.store, consolidated=False)
+                dataset_exists = True
+            except Exception:  # noqa: BLE001
+                dataset_exists = False
+    
+            if context.has_partition_key and dataset_exists:
+                obj.to_zarr(
+                    session.store,
+                    mode="a",
+                    append_dim=schema.append_dim(),
+                    write_empty_chunks=False,
+                )
+            else:
+                obj.to_zarr(
+                    session.store,
+                    zarr_format=3,
+                    mode="w-",
+                    write_empty_chunks=False,
+                    encoding={
+                        var: {
+                            "dtype": "float32",
+                            "chunks": tuple(
+                                [
+                                    obj.coords[k].size if v == -1 else v
+                                    for k, v in schema._chunks.items()
+                                ]
+                            ),
+                            "shards": tuple(
+                                [
+                                    obj.coords[k].size if v == -1 else v
+                                    for k, v in schema._shards.items()
+                                ]
+                            ),
+                            "compressors": zarr.codecs.BloscCodec(
+                                cname="zstd",
+                                clevel=3,
+                                shuffle="bitshuffle",
+                            ),
+                        }
+                        for var in obj.data_vars
                     }
-                    for var in obj.data_vars
-                }
-                | {coord: {"chunks": 10000} for coord in obj.coords if coord not in obj.dims}
-                | {
-                    schema.append_dim(): {
-                        "dtype": int,
-                        "units": "nanoseconds since 1970-01-01",
-                        "calendar": "proleptic_gregorian",
-                        "chunks": 10000,
-                    }
-                },
+                    | {coord: {"chunks": 10000} for coord in obj.coords if coord not in obj.dims}
+                    | {
+                        schema.append_dim(): {
+                            "dtype": int,
+                            "units": "nanoseconds since 1970-01-01",
+                            "calendar": "proleptic_gregorian",
+                            "chunks": 10000,
+                        }
+                    },
+                )
+    
+            commit_hash = session.commit(
+                f"dagster materialization: {context.asset_key} at {dt.datetime.now(dt.UTC)}"
             )
-
-        commit_hash = session.commit(
-            f"dagster materialization: {context.asset_key} at {dt.datetime.now(dt.UTC)}"
-        )
 
         size_bytes = obj.nbytes
         context.add_output_metadata(
