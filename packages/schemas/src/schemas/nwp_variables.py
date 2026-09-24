@@ -89,7 +89,7 @@ def visibility(dims: tuple[str, ...], nullable: bool = True) -> Any:
 
 def relative_humidity_2m(dims: tuple[str, ...], nullable: bool = False) -> Any:
     return pa.Field(
-        dims=dims, ge=0, le=110, nullable=nullable
+        dims=dims, ge=0, le=120, nullable=nullable
     )  # Supersaturation means > 100% is posible
 
 
