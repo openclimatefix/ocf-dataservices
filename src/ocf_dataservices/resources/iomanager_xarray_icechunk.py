@@ -145,21 +145,36 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
             session = repo.writable_session(branch="main")
     
             dataset_exists = False
+            existing_ds = None
             try:
                 # Check if a valid zarr dataset actually exists in the store.
                 # (An icechunk repo might exist without a zarr dataset inside it if a previous run failed).
-                xr.open_zarr(session.store, consolidated=False)
+                existing_ds = xr.open_zarr(session.store, consolidated=False)
                 dataset_exists = True
             except Exception:  # noqa: BLE001
                 dataset_exists = False
     
+            obj_to_write = obj
+            skip_write = False
+
             if context.has_partition_key and dataset_exists:
-                obj.to_zarr(
-                    session.store,
-                    mode="a",
-                    append_dim=schema.append_dim(),
-                    write_empty_chunks=False,
-                )
+                append_dim = schema.append_dim()
+                
+                existing_times = existing_ds[append_dim].values.astype("datetime64[ns]")
+                incoming_times = obj[append_dim].values.astype("datetime64[ns]")
+                is_new = ~np.isin(incoming_times, existing_times)
+                
+                if not is_new.any():
+                    skip_write = True
+                else:
+                    obj_to_write = obj.isel({append_dim: is_new})
+                    obj_to_write = obj_to_write.sortby(append_dim)
+                    obj_to_write.to_zarr(
+                        session.store,
+                        mode="a",
+                        append_dim=append_dim,
+                        write_empty_chunks=False,
+                    )
             else:
                 obj.to_zarr(
                     session.store,
@@ -200,24 +215,32 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
                     },
                 )
     
-            commit_hash = session.commit(
-                f"dagster materialization: {context.asset_key} at {dt.datetime.now(dt.UTC)}"
-            )
+            if not skip_write:
+                commit_hash = session.commit(
+                    f"dagster materialization: {context.asset_key} at {dt.datetime.now(dt.UTC)}"
+                )
+            else:
+                commit_hash = "N/A (Skipped duplicates)"
 
-        size_bytes = obj.nbytes
-        context.add_output_metadata(
-            {
-                "store_path": dg.MetadataValue.path(store_path),
-                "partition_key": context.partition_key if context.has_partition_key else "N/A",
-                "data_vars": list(obj.data_vars),
-                "dims": dict(obj.dims),
-                "icechunk_commit": dg.MetadataValue.text(str(commit_hash)),
-                "size_in_memory_bytes": dg.MetadataValue.int(size_bytes),
-                "size_human_readable": dg.MetadataValue.text(
-                    f"{size_bytes / (1024 * 1024):.2f} MB"
-                ),
-            }
-        )
+        size_bytes = obj_to_write.nbytes if not skip_write else 0
+        written_dims = dict(obj_to_write.dims) if not skip_write else {**dict(obj.dims), schema.append_dim(): 0}
+        
+        metadata = {
+            "store_path": dg.MetadataValue.path(store_path),
+            "partition_key": context.partition_key if context.has_partition_key else "N/A",
+            "data_vars": list(obj.data_vars),
+            "dims": written_dims,
+            "icechunk_commit": dg.MetadataValue.text(str(commit_hash)),
+            "size_in_memory_bytes": dg.MetadataValue.int(size_bytes),
+            "size_human_readable": dg.MetadataValue.text(
+                f"{size_bytes / (1024 * 1024):.2f} MB"
+            ),
+        }
+        
+        if skip_write:
+            metadata["duplicate_partition_skipped"] = dg.MetadataValue.bool(True)
+            
+        context.add_output_metadata(metadata)
 
     def load_input(self, context: dg.InputContext) -> xr.Dataset:
         store_path = self._get_store_path(context.asset_key)
