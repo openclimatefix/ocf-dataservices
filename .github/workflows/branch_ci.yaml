@@ -1,0 +1,16 @@
+name: Branch CI
+run-name: Branch CI for ${{ github.ref_name }} by ${{ github.actor }}
+
+on:  
+  push:
+    branches-ignore: [ $default-branch ]
+    paths-ignore: ['README.md']
+
+jobs:
+  branch_ci:
+    uses: openclimatefix/.github/.github/workflows/branch_ci.yml@main
+    with:
+      containerfile: Containerfile
+      tests_runner: unittest
+      tests_folder: packages/**/tests
+    secrets: inherit
