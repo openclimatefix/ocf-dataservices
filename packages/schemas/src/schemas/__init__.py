@@ -29,6 +29,9 @@ from .nwp_variables import (
     categorical_precipitation_type_surface as categorical_precipitation_type_surface,
 )
 from .nwp_variables import (
+    direct_solar_radiation as direct_solar_radiation,
+)
+from .nwp_variables import (
     downward_long_wave_radiation_flux_surface as downward_long_wave_radiation_flux_surface,
 )
 from .nwp_variables import (
@@ -42,9 +45,6 @@ from .nwp_variables import (
 )
 from .nwp_variables import (
     medium_cloud_cover as medium_cloud_cover,
-)
-from .nwp_variables import (
-    precipitation_surface as precipitation_surface,
 )
 from .nwp_variables import (
     pressure_reduced_to_mean_sea_level as pressure_reduced_to_mean_sea_level,
@@ -65,13 +65,10 @@ from .nwp_variables import (
     total_precipitation_rate as total_precipitation_rate,
 )
 from .nwp_variables import (
+    uv_b_radiation as uv_b_radiation,
+)
+from .nwp_variables import (
     visibility as visibility,
-)
-from .nwp_variables import (
-    wind_direction_10m as wind_direction_10m,
-)
-from .nwp_variables import (
-    wind_speed_10m as wind_speed_10m,
 )
 from .nwp_variables import (
     wind_u_10m as wind_u_10m,
@@ -80,10 +77,16 @@ from .nwp_variables import (
     wind_u_100m as wind_u_100m,
 )
 from .nwp_variables import (
+    wind_u_200m as wind_u_200m,
+)
+from .nwp_variables import (
     wind_v_10m as wind_v_10m,
 )
 from .nwp_variables import (
     wind_v_100m as wind_v_100m,
+)
+from .nwp_variables import (
+    wind_v_200m as wind_v_200m,
 )
 from .validation import (
     validates as validates,
@@ -92,6 +95,7 @@ from .validation import (
 __all__ = [
     "NwpDatasetSchema",
     "categorical_precipitation_type_surface",
+    "direct_solar_radiation",
     "downward_long_wave_radiation_flux_surface",
     "downward_short_wave_radiation_flux_surface",
     "enforce_dim_order",
@@ -102,7 +106,6 @@ __all__ = [
     "longitude",
     "low_cloud_cover",
     "medium_cloud_cover",
-    "precipitation_surface",
     "pressure_reduced_to_mean_sea_level",
     "relative_humidity_2m",
     "snow_depth",
@@ -110,14 +113,15 @@ __all__ = [
     "temperature_2m",
     "total_cloud_cover_atmosphere",
     "total_precipitation_rate",
+    "uv_b_radiation",
     "validates",
     "visibility",
-    "wind_direction_10m",
-    "wind_speed_10m",
     "wind_u_10m",
     "wind_u_100m",
+    "wind_u_200m",
     "wind_v_10m",
     "wind_v_100m",
+    "wind_v_200m",
     "x_laea",
     "y_laea",
 ]

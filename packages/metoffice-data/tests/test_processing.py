@@ -70,6 +70,29 @@ class TestProcessing(unittest.TestCase):
         self.assertEqual(float(out["x_laea"][-1]), 332000.0)
         self.assertNotIn("latitude", out.coords)
 
+    def test_wind_speed_direction_converted_to_uv(self):
+        shape = ("step", "latitude", "longitude")
+        ds = xr.Dataset(
+            data_vars={
+                "si10": (shape, np.full((2, 2, 2), 10.0, dtype=np.float32)),
+                # 270 deg = wind from West = blowing East (+u, 0 v)
+                "wdir": (shape, np.full((2, 2, 2), 270.0, dtype=np.float32)),
+            },
+            coords={
+                "time": np.datetime64("2024-01-01T00:00"),
+                "step": [np.timedelta64(0, "h"), np.timedelta64(1, "h")],
+                "latitude": [20.0, 21.0],
+                "longitude": [70.0, 71.0],
+            },
+        )
+        out = _transform(ds, dims=MetOfficeGlobalIndiaSchema.dims())
+        self.assertIn("wind_u_10m", out.data_vars)
+        self.assertIn("wind_v_10m", out.data_vars)
+        self.assertNotIn("wind_speed_10m", out.data_vars)
+        self.assertNotIn("wind_direction_10m", out.data_vars)
+        np.testing.assert_allclose(out["wind_u_10m"].values, 10.0, atol=1e-5)
+        np.testing.assert_allclose(out["wind_v_10m"].values, 0.0, atol=1e-5)
+
 
 if __name__ == "__main__":
     unittest.main()

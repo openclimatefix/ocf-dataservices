@@ -90,6 +90,10 @@ def open_it(
         )
 
     ds_sliced = ds_sliced.rename({"lead_time": "step"})
+    ds_sliced = ds_sliced.sel(
+        step=slice(np.timedelta64(0, "h"), np.timedelta64(85, "h")),
+        ensemble_member=slice(1, 50),
+    )
     ds_sliced = ds_sliced.transpose("init_time", "step", "ensemble_member", "latitude", "longitude")
 
     return ds_sliced
@@ -136,11 +140,34 @@ def _to_dataset(data_arrays: dict[str, xr.DataArray], ds_sliced: xr.Dataset) -> 
     # Build the dataset using .variable to strip coordinate dicts from the data variables,
     # which prevents xarray from implicitly restoring the original dimension insertion order,
     # then enforce the dimension order that Dagster's IOManagers strictly verify.
+    var_rename = {"precipitation_surface": "total_precipitation_rate"}
+    renamed_vars = {var_rename.get(k, k): v.variable for k, v in data_arrays.items()}
+
     ds = xr.Dataset(
-        data_vars={k: v.variable for k, v in data_arrays.items()},
+        data_vars=renamed_vars,
         coords={c: ds_sliced.coords[c].variable for c in ds_sliced.coords},
     )
-    return enforce_dim_order(ds, DynamicalEcmwfEnsSchema.dims(), keep_vars=list(data_arrays.keys()))
+    if "ensemble_member" in ds.coords:
+        ds["ensemble_member"] = ds["ensemble_member"].astype(np.int16)
+
+    # Dynamical stores de-accumulated rates as backward averages over [T-dt, T] (leaving step=0 as
+    # NaN). Shift them by -1 along `step` and drop the final step so step T holds the forward rate
+    # over [T, T+dt], matching the forward-difference convention.
+    deaccum_vars = [
+        v
+        for v in (
+            "downward_short_wave_radiation_flux_surface",
+            "downward_long_wave_radiation_flux_surface",
+            "total_precipitation_rate",
+        )
+        if v in ds.data_vars
+    ]
+    if deaccum_vars and "step" in ds.dims and ds.sizes["step"] > 1:
+        for var in deaccum_vars:
+            ds[var] = ds[var].shift(step=-1)
+        ds = ds.isel(step=slice(0, -1))
+
+    return enforce_dim_order(ds, DynamicalEcmwfEnsSchema.dims(), keep_vars=list(renamed_vars.keys()))
 
 
 @validates(DynamicalEcmwfEnsSchema)

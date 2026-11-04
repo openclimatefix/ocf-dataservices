@@ -164,6 +164,19 @@ def _transform(ds: xr.Dataset, dims: Sequence[str]) -> xr.Dataset:
     if "temperature_2m" in ds.data_vars:
         ds["temperature_2m"] = ds["temperature_2m"] - 273.15
 
+    for cloud_var in _CLOUD_VARS:
+        if cloud_var in ds.data_vars:
+            if float(ds[cloud_var].max()) <= 1.1:
+                ds[cloud_var] = ds[cloud_var] * 100.0
+            ds[cloud_var] = np.clip(ds[cloud_var], a_min=0.0, a_max=100.0)
+
+    if "wind_speed_10m" in ds.data_vars and "wind_direction_10m" in ds.data_vars:
+        if "wind_u_10m" not in ds.data_vars or "wind_v_10m" not in ds.data_vars:
+            rad = np.deg2rad(ds["wind_direction_10m"])
+            ds["wind_u_10m"] = -ds["wind_speed_10m"] * np.sin(rad)
+            ds["wind_v_10m"] = -ds["wind_speed_10m"] * np.cos(rad)
+        ds = ds.drop_vars(["wind_speed_10m", "wind_direction_10m"])
+
     if "x_laea" in dims:
         ds = _assign_ukv_coords(ds)
 
@@ -174,9 +187,7 @@ def _transform(ds: xr.Dataset, dims: Sequence[str]) -> xr.Dataset:
     if extra_coords:
         ds = ds.drop_vars(extra_coords, errors="ignore")
 
-    print(list(ds.data_vars))
-
-    schema_vars = list(set(_VAR_MAPPING.values()))
+    schema_vars = list(set(_VAR_MAPPING.values()) - {"wind_speed_10m", "wind_direction_10m"})
     return enforce_dim_order(ds, dims, keep_vars=schema_vars)
 
 
