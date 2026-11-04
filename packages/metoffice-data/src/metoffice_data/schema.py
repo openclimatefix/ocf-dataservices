@@ -24,8 +24,6 @@ from schemas.nwp_variables import (
     total_cloud_cover_atmosphere,
     total_precipitation_rate,
     visibility,
-    wind_direction_10m,
-    wind_speed_10m,
     wind_u_10m,
     wind_v_10m,
 )
@@ -138,8 +136,8 @@ class MetOfficeUkvSchema(NwpDatasetSchema):
         downward_short_wave_radiation_flux_surface(dims=_dims, nullable=True)
     )
     temperature_2m: np.float32 = temperature_2m(dims=_dims, nullable=False)
-    wind_speed_10m: np.float32 = wind_speed_10m(dims=_dims, nullable=True)
-    wind_direction_10m: np.float32 = wind_direction_10m(dims=_dims, nullable=True)
+    wind_u_10m: np.float32 = wind_u_10m(dims=_dims, nullable=True)
+    wind_v_10m: np.float32 = wind_v_10m(dims=_dims, nullable=True)
 
     class Config(NwpDatasetSchema.Config):
         pass

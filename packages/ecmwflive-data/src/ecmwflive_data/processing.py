@@ -93,12 +93,14 @@ def _transform(
 
     # bbox_nwse is North, West, South, East
     n, w, s, e = bbox_nwse
-    ds = ds.sel(latitude=slice(n, s), longitude=slice(w, e))
+    if "latitude" in ds.coords and ds.latitude.size > 1 and ds.latitude[0] < ds.latitude[-1]:
+        lat_slice = slice(s, n)
+    else:
+        lat_slice = slice(n, s)
+    ds = ds.sel(latitude=lat_slice, longitude=slice(w, e))
 
-    # Time slicing - strictly truncate to max_step_hours to remove non-hourly jumps
-    if "step" in ds.coords:
-        max_step = np.timedelta64(max_step_hours, "h")
-        ds = ds.sel(step=slice(None, max_step))
+    if ds.sizes.get("latitude", 0) == 0 or ds.sizes.get("longitude", 0) == 0:
+        raise ValueError(f"Empty spatial slice for bbox {bbox_nwse}: sizes={dict(ds.sizes)}")
 
     # Rename coordinates
     rename_coords = {}
@@ -151,8 +153,10 @@ def _transform(
         "low_cloud_cover",
         "total_cloud_cover_atmosphere",
     ]:
-        if cloud_var in ds.data_vars and ds[cloud_var].max() <= 1.0:
-            ds[cloud_var] = ds[cloud_var] * 100.0
+        if cloud_var in ds.data_vars:
+            if float(ds[cloud_var].max()) <= 1.1:
+                ds[cloud_var] = ds[cloud_var] * 100.0
+            ds[cloud_var] = np.clip(ds[cloud_var], a_min=0.0, a_max=100.0)
 
     # Accumulation variables to Flux
     # ECMWF HRES Live and ENS operational data accumulate radiation from the start of the forecast.
@@ -182,6 +186,11 @@ def _transform(
 
         # The forward difference leaves the last step as NaN. We drop it.
         ds = ds.isel(step=slice(0, -1))
+
+    # Time slicing - strictly truncate to max_step_hours after radiation differencing
+    if "step" in ds.coords:
+        max_step = np.timedelta64(max_step_hours, "h")
+        ds = ds.sel(step=slice(None, max_step))
 
     for var in ds.data_vars:
         ds[var] = ds[var].astype(np.float32)

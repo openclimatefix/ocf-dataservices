@@ -10,10 +10,10 @@ from schemas.nwp_variables import (
     categorical_precipitation_type_surface,
     downward_long_wave_radiation_flux_surface,
     downward_short_wave_radiation_flux_surface,
-    precipitation_surface,
     pressure_reduced_to_mean_sea_level,
     temperature_2m,
     total_cloud_cover_atmosphere,
+    total_precipitation_rate,
     wind_u_10m,
     wind_u_100m,
     wind_v_10m,
@@ -62,7 +62,7 @@ class DynamicalEcmwfEnsSchema(NwpDatasetSchema):
     downward_short_wave_radiation_flux_surface: np.float32 = (
         downward_short_wave_radiation_flux_surface(dims=_dims, nullable=True)
     )
-    precipitation_surface: np.float32 = precipitation_surface(dims=_dims, nullable=True)
+    total_precipitation_rate: np.float32 = total_precipitation_rate(dims=_dims, nullable=True)
     categorical_precipitation_type_surface: np.float32 = categorical_precipitation_type_surface(
         dims=_dims, nullable=True
     )
@@ -72,7 +72,7 @@ class DynamicalEcmwfEnsSchema(NwpDatasetSchema):
     @check(
         "downward_long_wave_radiation_flux_surface",
         "downward_short_wave_radiation_flux_surface",
-        "precipitation_surface",
+        "total_precipitation_rate",
         "categorical_precipitation_type_surface",
         "wind_v_10m",
         "wind_u_10m",
@@ -81,4 +81,4 @@ class DynamicalEcmwfEnsSchema(NwpDatasetSchema):
         return float(da.isnull().mean()) < 0.02
 
     class Config(NwpDatasetSchema.Config):
-        chunked = True  # Ensures the dataset is chunked
+        pass

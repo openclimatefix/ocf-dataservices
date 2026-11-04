@@ -31,10 +31,6 @@ def downward_short_wave_radiation_flux_surface(dims: tuple[str, ...], nullable: 
     return pa.Field(dims=dims, ge=0, le=2000, nullable=nullable)
 
 
-def precipitation_surface(dims: tuple[str, ...], nullable: bool = True) -> Any:
-    return pa.Field(dims=dims, ge=0, le=1, nullable=nullable)
-
-
 def categorical_precipitation_type_surface(dims: tuple[str, ...], nullable: bool = True) -> Any:
     return pa.Field(dims=dims, ge=0, le=255, nullable=nullable)
 
@@ -92,10 +88,3 @@ def relative_humidity_2m(dims: tuple[str, ...], nullable: bool = False) -> Any:
         dims=dims, ge=0, le=120, nullable=nullable
     )  # Supersaturation means > 100% is posible
 
-
-def wind_speed_10m(dims: tuple[str, ...], nullable: bool = True) -> Any:
-    return pa.Field(dims=dims, ge=0, le=150, nullable=nullable)
-
-
-def wind_direction_10m(dims: tuple[str, ...], nullable: bool = True) -> Any:
-    return pa.Field(dims=dims, ge=0, le=360, nullable=nullable)

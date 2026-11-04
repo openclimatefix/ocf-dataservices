@@ -7,8 +7,7 @@ from pandera.errors import SchemaError
 
 
 class TestSchemas(unittest.TestCase):
-    def test_ukv_schema_rejects_step_above_42(self):
-        """The UKV schema should reject steps beyond 42 hours."""
+    def _make_ukv_dataset(self, max_step_hours: int = 42) -> xr.Dataset:
         dims = ("init_time", "step", "y_laea", "x_laea")
         var_names = [
             "high_cloud_cover",
@@ -21,22 +20,36 @@ class TestSchemas(unittest.TestCase):
             "downward_long_wave_radiation_flux_surface",
             "downward_short_wave_radiation_flux_surface",
             "temperature_2m",
-            "wind_speed_10m",
-            "wind_direction_10m",
+            "wind_u_10m",
+            "wind_v_10m",
         ]
-        ds = xr.Dataset(
+        return xr.Dataset(
             data_vars={
-                name: (dims, np.zeros((1, 2, 2, 2), dtype=np.float32)) for name in var_names
+                name: (
+                    dims,
+                    np.full(
+                        (1, 2, 2, 2),
+                        50.0 if "humidity" in name or "cloud" in name else 0.0,
+                        dtype=np.float32,
+                    ),
+                )
+                for name in var_names
             },
             coords={
                 "init_time": [np.datetime64("2024-01-01T00:00")],
-                "step": [np.timedelta64(0, "h"), np.timedelta64(43, "h")],  # 43h should fail
+                "step": [np.timedelta64(0, "h"), np.timedelta64(max_step_hours, "h")],
                 "y_laea": [700000.0, 698000.0],
                 "x_laea": [-576000.0, -574000.0],
             },
         )
+
+    def test_ukv_schema_passes_valid_dataset(self):
+        MetOfficeUkvSchema.validate(self._make_ukv_dataset(max_step_hours=42))
+
+    def test_ukv_schema_rejects_step_above_42(self):
+        """The UKV schema should reject steps beyond 42 hours."""
         with self.assertRaises(SchemaError):
-            MetOfficeUkvSchema.validate(ds)
+            MetOfficeUkvSchema.validate(self._make_ukv_dataset(max_step_hours=43))
 
 
 if __name__ == "__main__":
