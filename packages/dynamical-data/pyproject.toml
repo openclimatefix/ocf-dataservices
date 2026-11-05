@@ -12,7 +12,11 @@ dependencies = [
     "xarray>=2026.1.0",
     "pandera[xarray]>=0.32.1",
     "schemas",
+    "storage",
 ]
+
+[project.scripts]
+dynamical-data = "dynamical_data.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.9.28,<0.10.0"]

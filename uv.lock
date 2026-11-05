@@ -15,6 +15,7 @@ members = [
     "metoffice-data",
     "ocf-dataservices",
     "schemas",
+    "storage",
 ]
 
 [[package]]
@@ -573,21 +574,6 @@ wheels = [
 ]
 
 [[package]]
-name = "dagster-aws"
-version = "0.29.17"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "boto3" },
-    { name = "dagster" },
-    { name = "packaging" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/79/b7/864fd94ae6573204a0e86a0b69c88e7e2318987450f2e4d07e6bee6b6366/dagster_aws-0.29.17.tar.gz", hash = "sha256:35b001c5da481f2ae9984ab897721a3adb6c35281512b40a005cd60ee678aeff", size = 429736, upload-time = "2026-08-07T18:43:12.738Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f9/ce/ca528250e1cc65a98823bfd950b40763ca3358c4c4356d8905d2eeb5c850/dagster_aws-0.29.17-py3-none-any.whl", hash = "sha256:9f695e67ed137e4f37bc209440420c39dd221ea06df74a9ce9e3fb34a8293942", size = 165398, upload-time = "2026-08-07T18:43:11.431Z" },
-]
-
-[[package]]
 name = "dagster-cloud-cli"
 version = "1.13.17"
 source = { registry = "https://pypi.org/simple" }
@@ -824,6 +810,7 @@ dependencies = [
     { name = "dynamical-catalog" },
     { name = "pandera", extra = ["xarray"] },
     { name = "schemas" },
+    { name = "storage" },
     { name = "xarray" },
 ]
 
@@ -832,6 +819,7 @@ requires-dist = [
     { name = "dynamical-catalog", specifier = ">=0.5.0" },
     { name = "pandera", extras = ["xarray"], specifier = ">=0.32.1" },
     { name = "schemas", editable = "packages/schemas" },
+    { name = "storage", editable = "packages/storage" },
     { name = "xarray", specifier = ">=2026.1.0" },
 ]
 
@@ -880,15 +868,6 @@ wheels = [
 ]
 
 [[package]]
-name = "ecmwf-api-client"
-version = "1.7.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/49/a6/23179f1fd6226c42c3c7103a265ade7c020e66f45f6068ec4bf66539068a/ecmwf_api_client-1.7.0.tar.gz", hash = "sha256:1971a047c01cc50cfc893f13fdfa710cf56fb872f1c04685b13c6f1d18431164", size = 13069, upload-time = "2026-06-17T13:12:39.688Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/52/c3/2d9bfd9cf6a0866dedd74936633761606c005d4aeee17be2b04764e3f1da/ecmwf_api_client-1.7.0-py3-none-any.whl", hash = "sha256:3648fa1f4cb0d56274e388acaccf5500da260f12126566e0fc0a9538e46f12d1", size = 13543, upload-time = "2026-06-17T13:12:38.383Z" },
-]
-
-[[package]]
 name = "ecmwflive-data"
 version = "0.1.0"
 source = { editable = "packages/ecmwflive-data" }
@@ -897,6 +876,7 @@ dependencies = [
     { name = "pandera" },
     { name = "s3fs" },
     { name = "schemas" },
+    { name = "storage" },
     { name = "xarray" },
 ]
 
@@ -906,6 +886,7 @@ requires-dist = [
     { name = "pandera" },
     { name = "s3fs" },
     { name = "schemas", editable = "packages/schemas" },
+    { name = "storage", editable = "packages/storage" },
     { name = "xarray" },
 ]
 
@@ -915,18 +896,18 @@ version = "0.1.0"
 source = { editable = "packages/ecmwfmars-data" }
 dependencies = [
     { name = "cfgrib" },
-    { name = "ecmwf-api-client" },
     { name = "pandera", extra = ["xarray"] },
     { name = "schemas" },
+    { name = "storage" },
     { name = "xarray" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "cfgrib", specifier = ">=0.9.15" },
-    { name = "ecmwf-api-client", specifier = ">=1.7.0" },
     { name = "pandera", extras = ["xarray"], specifier = ">=0.32.1" },
     { name = "schemas", editable = "packages/schemas" },
+    { name = "storage", editable = "packages/storage" },
     { name = "xarray", specifier = ">=2026.1.0" },
 ]
 
@@ -1559,6 +1540,7 @@ dependencies = [
     { name = "cfgrib" },
     { name = "pandera" },
     { name = "schemas" },
+    { name = "storage" },
     { name = "xarray" },
 ]
 
@@ -1567,6 +1549,7 @@ requires-dist = [
     { name = "cfgrib" },
     { name = "pandera" },
     { name = "schemas", editable = "packages/schemas" },
+    { name = "storage", editable = "packages/storage" },
     { name = "xarray" },
 ]
 
@@ -1752,7 +1735,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "dagster" },
-    { name = "dagster-aws" },
     { name = "dagster-docker" },
     { name = "dagster-postgres" },
     { name = "dagster-webserver" },
@@ -1762,9 +1744,8 @@ dependencies = [
     { name = "icechunk" },
     { name = "metoffice-data" },
     { name = "pandera" },
-    { name = "requests" },
     { name = "schemas" },
-    { name = "sentry-sdk" },
+    { name = "storage" },
     { name = "xarray" },
 ]
 
@@ -1780,7 +1761,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "dagster", specifier = ">=1.12.11" },
-    { name = "dagster-aws", specifier = ">=0.28.11" },
     { name = "dagster-docker", specifier = ">=0.28.11" },
     { name = "dagster-postgres", specifier = ">=0.28.11" },
     { name = "dagster-webserver", specifier = ">=1.12.11" },
@@ -1790,9 +1770,8 @@ requires-dist = [
     { name = "icechunk", specifier = ">=2.1.1" },
     { name = "metoffice-data", editable = "packages/metoffice-data" },
     { name = "pandera", specifier = ">=0.32.1" },
-    { name = "requests", specifier = ">=2.31.0" },
     { name = "schemas", editable = "packages/schemas" },
-    { name = "sentry-sdk", specifier = ">=2.66,<3" },
+    { name = "storage", editable = "packages/storage" },
     { name = "xarray", specifier = ">=2026.7.0" },
 ]
 
@@ -2488,19 +2467,6 @@ requires-dist = [{ name = "pandera", extras = ["xarray"], specifier = ">=0.32.1"
 dev = []
 
 [[package]]
-name = "sentry-sdk"
-version = "2.68.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "certifi" },
-    { name = "urllib3" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/5b/94/23b7dd072acb9628907bd3f4fbf61794a7b12a9db8f33c1276f70ae5ac92/sentry_sdk-2.68.0.tar.gz", hash = "sha256:648c58e9887311a03470a41539e24bdbbf64a30ca4f5336f7e3dcc87276400b3", size = 1008854, upload-time = "2026-08-13T09:06:21.268Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7d/9b/e2421d08956d0bc4691d995393d835e563886bff499d8fb10fdefae85a8d/sentry_sdk-2.68.0-py3-none-any.whl", hash = "sha256:538e56c2d03679d42f7c0cb5f1af73a7a510b00abc7e296c13ac49b107b713a4", size = 518670, upload-time = "2026-08-13T09:06:19.735Z" },
-]
-
-[[package]]
 name = "setuptools"
 version = "84.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2558,6 +2524,27 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b5/b4/205b0d5241d934e8add0c38aa924c4f9fb7330834ff11e5444db964ec3f9/starlette-1.6.0.tar.gz", hash = "sha256:d4e3ac5e546444960c710297a3c9fc3f7ebae1b7e963f3d36173b49da535be9b", size = 2716969, upload-time = "2026-08-08T18:27:57.512Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/cb/6a6a47d5b464bd08695d254f3da6e7986cc70c9fa5d778eda57538edfe56/starlette-1.6.0-py3-none-any.whl", hash = "sha256:a86dd39d14bb45f85a3d18525215a9ef0cfd1f192ac793220e72598c90335f0c", size = 75969, upload-time = "2026-08-08T18:27:56.196Z" },
+]
+
+[[package]]
+name = "storage"
+version = "0.1.0"
+source = { editable = "packages/storage" }
+dependencies = [
+    { name = "icechunk" },
+    { name = "numpy" },
+    { name = "schemas" },
+    { name = "xarray" },
+    { name = "zarr" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "icechunk", specifier = ">=2.1.1" },
+    { name = "numpy" },
+    { name = "schemas", editable = "packages/schemas" },
+    { name = "xarray", specifier = ">=2026.1.0" },
+    { name = "zarr", specifier = ">=3.0.0" },
 ]
 
 [[package]]

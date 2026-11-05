@@ -1,114 +1,20 @@
 import base64
 import datetime as dt
-import fcntl
 import html
-import re
 import warnings
-from contextlib import contextmanager
-from pathlib import Path
 
 import dagster as dg
 import icechunk
 import numpy as np
 import xarray as xr
-import zarr.codecs
-
-_SPATIAL_DIMS = ("latitude", "longitude", "y_laea", "x_laea")
-_STATS = ("mean", "std", "min", "max")
-
-
-def _compute_stats_reduction(
-    ds: xr.Dataset,
-    reduce_dims: list[str],
-    append_dim: str,
-) -> xr.Dataset | None:
-    if not reduce_dims:
-        return None
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        parts = [
-            ds.mean(dim=reduce_dims, skipna=True),
-            ds.std(dim=reduce_dims, skipna=True),
-            ds.min(dim=reduce_dims, skipna=True),
-            ds.max(dim=reduce_dims, skipna=True),
-        ]
-    stat_coord = xr.DataArray(list(_STATS), dims="stat", name="stat")
-    reduced = xr.concat(parts, dim=stat_coord)
-    remaining_dims = [str(d) for d in ds.dims if d not in reduce_dims]
-    target_dims = [append_dim, "stat"] + [d for d in remaining_dims if d != append_dim]
-    return reduced.transpose(*target_dims).astype(np.float32)
-
-
-def _write_stats_group(
-    store: icechunk.IcechunkStore,
-    reduced: xr.Dataset | None,
-    group: str,
-    append_dim: str,
-    has_partition_key: bool,
-) -> bool:
-    if reduced is None:
-        return False
-    group_exists = False
-    existing_group = None
-    try:
-        existing_group = xr.open_zarr(store, group=group, consolidated=False)
-        group_exists = bool(existing_group.data_vars)
-    except Exception:  # noqa: BLE001
-        group_exists = False
-
-    if has_partition_key and group_exists and existing_group is not None:
-        existing_times = existing_group[append_dim].values.astype("datetime64[ns]")
-        incoming_times = reduced[append_dim].values.astype("datetime64[ns]")
-        is_new = ~np.isin(incoming_times, existing_times)
-        if not is_new.any():
-            return False
-        reduced_to_write = reduced.isel({append_dim: is_new}).sortby(append_dim)
-        reduced_to_write.to_zarr(
-            store,
-            group=group,
-            mode="a",
-            append_dim=append_dim,
-            write_empty_chunks=False,
-        )
-        return True
-
-    reduced_to_write = reduced.sortby(append_dim) if has_partition_key else reduced
-    reduced_to_write.to_zarr(
-        store,
-        group=group,
-        zarr_format=3,
-        mode="w-",
-        write_empty_chunks=False,
-        encoding={
-            var: {
-                "dtype": "float32",
-                "chunks": tuple(
-                    1 if d == append_dim else reduced_to_write.coords[d].size
-                    for d in reduced_to_write.dims
-                ),
-                "compressors": zarr.codecs.BloscCodec(
-                    cname="zstd",
-                    clevel=3,
-                    shuffle="bitshuffle",
-                ),
-            }
-            for var in reduced_to_write.data_vars
-        }
-        | {
-            coord: {"chunks": 10000}
-            for coord in reduced_to_write.coords
-            if coord not in reduced_to_write.dims
-        }
-        | {
-            append_dim: {
-                "dtype": int,
-                "units": "nanoseconds since 1970-01-01",
-                "calendar": "proleptic_gregorian",
-                "chunks": 10000,
-            }
-        },
-    )
-    return True
+from storage.store import (
+    SPATIAL_DIMS,
+    open_icechunk_repo,
+    write_to_icechunk,
+)
+from storage.store import (
+    existing_partition as store_existing_partition,
+)
 
 
 def _render_var_svg(
@@ -242,7 +148,7 @@ def _build_stats_metadata(
         grid_2d = None
         if temporal_stats is not None and var_name in temporal_stats.data_vars:
             t_da = temporal_stats[var_name].sel(stat="mean")
-            t_extra = [d for d in t_da.dims if d not in _SPATIAL_DIMS]
+            t_extra = [d for d in t_da.dims if d not in SPATIAL_DIMS]
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 t_2d = t_da.mean(dim=t_extra, skipna=True) if t_extra else t_da
@@ -283,40 +189,14 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
     def _get_repo(
         self, store_path: str, create_if_not_exists: bool = False
     ) -> tuple[icechunk.Repository, bool]:
-        result = re.match(
-            r"^(?P<protocol>[\w]{2,6}):\/\/(?P<bucket>[\w-]+)\/(?P<prefix>[\w.\/-]+)$",
-            store_path,
+        return open_icechunk_repo(
+            store_path=store_path,
+            create_if_not_exists=create_if_not_exists,
+            aws_access_key_id=self.aws_access_key_id,
+            aws_secret_access_key=self.aws_secret_access_key,
+            aws_region_name=self.aws_region_name,
+            aws_endpoint_url=self.aws_endpoint_url,
         )
-        if result:
-            match (result.group("protocol"), result.group("bucket"), result.group("prefix")):
-                case ("s3", bucket, prefix):
-                    storage = icechunk.s3_storage(
-                        bucket=bucket,
-                        prefix=prefix,
-                        access_key_id=self.aws_access_key_id,
-                        secret_access_key=self.aws_secret_access_key,
-                        region=self.aws_region_name,
-                        endpoint_url=self.aws_endpoint_url,
-                    )
-                case (_, _, _):
-                    raise ValueError(f"Unsupported storage protocol: {result.group('protocol')}")
-        else:
-            storage = icechunk.local_filesystem_storage(
-                path=store_path,
-            )
-
-        created: bool = False
-        if icechunk.Repository.exists(storage):
-            repo = icechunk.Repository.open(storage)
-        elif create_if_not_exists:
-            try:
-                repo = icechunk.Repository.create(storage)
-                created = True
-            except Exception as e:  # noqa: BLE001
-                raise OSError(f"Failed to create repository at storage: {storage}. Error: {e}")
-        else:
-            raise OSError(f"Repository does not exist at storage: {storage}")
-        return repo, created
 
     def existing_partition(
         self,
@@ -326,26 +206,15 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
     ) -> xr.Dataset | None:
         """Gets a partition if it already exists, otherwise returns None."""
         store_path = self._get_store_path(asset_key)
-        try:
-            repo, _ = self._get_repo(store_path)
-        except OSError:
-            # The repo doesn't exist, so the partition can't exist either
-            return None
-
-        try:
-            session = repo.readonly_session(branch="main")
-            ds = xr.open_zarr(session.store, consolidated=False)
-
-            # Convert string "YYYY-MM-DD" to numpy datetime64 to match xarray indices
-            target_date = np.datetime64(partition_key)
-
-            # Check if the dimension exists and if the target date is in it
-            if append_dim in ds.dims and target_date in ds[append_dim].values:
-                return ds.sel({append_dim: target_date})
-            return None
-        except Exception:  # noqa: BLE001
-            # If the repo, store, or dimension doesn't exist yet, it's not materialized
-            return None
+        return store_existing_partition(
+            store_path=store_path,
+            append_dim=append_dim,
+            partition_key=partition_key,
+            aws_access_key_id=self.aws_access_key_id,
+            aws_secret_access_key=self.aws_secret_access_key,
+            aws_region_name=self.aws_region_name,
+            aws_endpoint_url=self.aws_endpoint_url,
+        )
 
     def handle_output(self, context: dg.OutputContext, obj: object) -> None:
         if not isinstance(obj, xr.Dataset):
@@ -355,171 +224,43 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
 
         metadata = context.definition_metadata or {}
         schema = metadata["schema"]
-        for key, spec in (("chunks", schema._chunks), ("shards", schema._shards)):
-            if list(obj.dims) != list(spec.keys()):
-                raise dg.DagsterInvariantViolationError(
-                    f"Dataset dimensions {list(obj.dims)} do not match supplied {key} keys "
-                    + f"{list(spec.keys())}"
-                )
-
-        append_dim = schema.append_dim()
-        spatial_dims = [str(d) for d in obj.dims if d in _SPATIAL_DIMS]
-        temporal_dims = [
-            str(d) for d in obj.dims if d != append_dim and d not in _SPATIAL_DIMS
-        ]
-        spatial_stats = _compute_stats_reduction(obj, spatial_dims, append_dim)
-        temporal_stats = _compute_stats_reduction(obj, temporal_dims, append_dim)
-
         keep_bits = metadata.get("keep_mantissa_bits", self.keep_mantissa_bits)
-        if keep_bits is not None:
-            mask = np.int32(~((1 << (23 - keep_bits)) - 1))
-
-            def apply_veltkamp(da: xr.DataArray) -> xr.DataArray:
-                if da.dtype == np.float32:
-                    if hasattr(da.data, "map_blocks"):
-                        # Support Dask-backed datasets without computing them into memory
-                        new_data = da.data.map_blocks(
-                            lambda x: np.bitwise_and(x.view(np.int32), mask).view(np.float32),
-                            dtype=np.float32,
-                        )
-                    else:
-                        # In-memory NumPy datasets
-                        new_data = np.bitwise_and(da.values.view(np.int32), mask).view(np.float32)
-                    return da.copy(data=new_data)
-                return da
-
-            obj = obj.map(apply_veltkamp, keep_attrs=True)
-
         store_path = self._get_store_path(context.asset_key)
 
-        @contextmanager
-        def _local_write_lock(path: str):
-            if re.match(r"^[\w]{2,6}://", path):
-                yield
-                return
-            lock_path = Path(path).with_suffix(".lock")
-            lock_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(lock_path, "w") as f:
-                fcntl.flock(f, fcntl.LOCK_EX)
-                try:
-                    yield
-                finally:
-                    fcntl.flock(f, fcntl.LOCK_UN)
-
-        with _local_write_lock(store_path):
-            repo, _was_created = self._get_repo(store_path, create_if_not_exists=True)
-            session = repo.writable_session(branch="main")
-    
-            dataset_exists = False
-            existing_ds = None
-            try:
-                # Check if a valid zarr dataset actually exists in the store.
-                # (An icechunk repo might exist without a zarr dataset inside it if a previous run failed).
-                existing_ds = xr.open_zarr(session.store, consolidated=False)
-                dataset_exists = True
-            except Exception:  # noqa: BLE001
-                dataset_exists = False
-    
-            obj_to_write = obj
-            skip_write = False
-
-            if context.has_partition_key and dataset_exists:
-                existing_times = existing_ds[append_dim].values.astype("datetime64[ns]")
-                incoming_times = obj[append_dim].values.astype("datetime64[ns]")
-                is_new = ~np.isin(incoming_times, existing_times)
-                
-                if not is_new.any():
-                    skip_write = True
-                else:
-                    obj_to_write = obj.isel({append_dim: is_new})
-                    obj_to_write = obj_to_write.sortby(append_dim)
-                    obj_to_write.to_zarr(
-                        session.store,
-                        mode="a",
-                        append_dim=append_dim,
-                        write_empty_chunks=False,
-                    )
-            else:
-                obj.to_zarr(
-                    session.store,
-                    zarr_format=3,
-                    mode="w-",
-                    write_empty_chunks=False,
-                    encoding={
-                        var: {
-                            "dtype": "float32",
-                            "chunks": tuple(
-                                [
-                                    obj.coords[k].size if v == -1 else v
-                                    for k, v in schema._chunks.items()
-                                ]
-                            ),
-                            "shards": tuple(
-                                [
-                                    obj.coords[k].size if v == -1 else v
-                                    for k, v in schema._shards.items()
-                                ]
-                            ),
-                            "compressors": zarr.codecs.BloscCodec(
-                                cname="zstd",
-                                clevel=3,
-                                shuffle="bitshuffle",
-                            ),
-                        }
-                        for var in obj.data_vars
-                    }
-                    | {coord: {"chunks": 10000} for coord in obj.coords if coord not in obj.dims}
-                    | {
-                        schema.append_dim(): {
-                            "dtype": int,
-                            "units": "nanoseconds since 1970-01-01",
-                            "calendar": "proleptic_gregorian",
-                            "chunks": 10000,
-                        }
-                    },
-                )
-
-            wrote_spatial = _write_stats_group(
-                session.store,
-                spatial_stats,
-                "stats_spatial",
-                append_dim,
-                context.has_partition_key,
-            )
-            wrote_temporal = _write_stats_group(
-                session.store,
-                temporal_stats,
-                "stats_temporal",
-                append_dim,
-                context.has_partition_key,
-            )
-
-            if not skip_write or wrote_spatial or wrote_temporal:
-                commit_hash = session.commit(
+        try:
+            result = write_to_icechunk(
+                ds=obj,
+                schema=schema,
+                store_path=store_path,
+                deduplicate=context.has_partition_key,
+                keep_mantissa_bits=keep_bits,
+                commit_message=(
                     f"dagster materialization: {context.asset_key} at {dt.datetime.now(dt.UTC)}"
-                )
-            else:
-                commit_hash = "N/A (Skipped duplicates)"
+                ),
+                aws_access_key_id=self.aws_access_key_id,
+                aws_secret_access_key=self.aws_secret_access_key,
+                aws_region_name=self.aws_region_name,
+                aws_endpoint_url=self.aws_endpoint_url,
+            )
+        except ValueError as exc:
+            raise dg.DagsterInvariantViolationError(str(exc)) from exc
 
-        size_bytes = obj_to_write.nbytes if not skip_write else 0
-        written_dims = dict(obj_to_write.dims) if not skip_write else {**dict(obj.dims), schema.append_dim(): 0}
-        
-        metadata = {
+        output_metadata = {
             "store_path": dg.MetadataValue.path(store_path),
             "partition_key": context.partition_key if context.has_partition_key else "N/A",
             "data_vars": list(obj.data_vars),
-            "dims": written_dims,
-            "icechunk_commit": dg.MetadataValue.text(str(commit_hash)),
-            "size_in_memory_bytes": dg.MetadataValue.int(size_bytes),
+            "dims": result.written_dims,
+            "icechunk_commit": dg.MetadataValue.text(str(result.commit_hash)),
+            "size_in_memory_bytes": dg.MetadataValue.int(result.size_bytes),
             "size_human_readable": dg.MetadataValue.text(
-                f"{size_bytes / (1024 * 1024):.2f} MB"
+                f"{result.size_bytes / (1024 * 1024):.2f} MB"
             ),
-        } | _build_stats_metadata(spatial_stats, temporal_stats)
-        
-        if skip_write:
-            metadata["duplicate_partition_skipped"] = dg.MetadataValue.bool(True)
-            
-        context.add_output_metadata(metadata)
+        } | _build_stats_metadata(result.spatial_stats, result.temporal_stats)
+
+        if result.skip_write:
+            output_metadata["duplicate_partition_skipped"] = dg.MetadataValue.bool(True)
+
+        context.add_output_metadata(output_metadata)
 
     def load_input(self, context: dg.InputContext) -> xr.Dataset:
         store_path = self._get_store_path(context.asset_key)
@@ -534,7 +275,6 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
                     "This is unexpected and likely indicates a misconfiguration."
                 )
             append_dim: str = context.upstream_output.definition_metadata["schema"].append_dim()
-            # Filter to the specific partition
             partition_key = context.partition_key
             ds = ds.sel({append_dim: partition_key})
 
