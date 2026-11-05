@@ -17,16 +17,14 @@ classifiers = [
 ]
 dependencies = [
     "dagster>=1.12.11",
-    "dagster-aws>=0.28.11",
     "dagster-docker>=0.28.11",
     "dagster-postgres>=0.28.11",
     "dagster-webserver>=1.12.11",
     "icechunk>=2.1.1",
-    "requests>=2.31.0",
-    "sentry-sdk>=2.66,<3",
     "ecmwfmars-data",
     "dynamical-data",
     "schemas",
+    "storage",
     "ecmwflive-data",
     "metoffice-data",
     "pandera>=0.32.1",
@@ -59,6 +57,7 @@ members = ["packages/*"]
 ecmwfmars-data = { workspace = true }
 dynamical-data = { workspace = true }
 schemas = { workspace = true }
+storage = { workspace = true }
 ecmwflive-data = { workspace = true }
 metoffice-data = { workspace = true }
 

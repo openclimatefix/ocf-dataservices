@@ -10,10 +10,13 @@ requires-python = ">=3.14"
 dependencies = [
     "cfgrib>=0.9.15",
     "xarray>=2026.1.0",
-    "ecmwf-api-client>=1.7.0",
     "pandera[xarray]>=0.32.1",
     "schemas",
+    "storage",
 ]
+
+[project.scripts]
+ecmwfmars-data = "ecmwfmars_data.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.9.28,<0.10.0"]

@@ -8,8 +8,12 @@ dependencies = [
     "xarray",
     "pandera",
     "schemas",
+    "storage",
     "cfgrib",
 ]
+
+[project.scripts]
+metoffice-data = "metoffice_data.cli:main"
 
 [build-system]
 requires = ["hatchling"]

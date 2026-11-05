@@ -9,8 +9,12 @@ dependencies = [
     "pandera",
     "s3fs",
     "schemas",
+    "storage",
     "cfgrib",
 ]
+
+[project.scripts]
+ecmwflive-data = "ecmwflive_data.cli:main"
 
 [build-system]
 requires = ["hatchling"]

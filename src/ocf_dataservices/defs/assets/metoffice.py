@@ -5,6 +5,7 @@ from pathlib import Path
 
 import dagster as dg
 import xarray as xr
+from metoffice_data.cli import INDIA_ORDER_ID, UKV_ORDER_ID, WESTEUROPE_ORDER_ID
 from metoffice_data.download import download_order_partition
 from metoffice_data.processing import (
     process_metoffice_india,
@@ -111,7 +112,7 @@ metoffice_ukv_partitions = dg.TimeWindowPartitionsDefinition(
 
 l0_metoffice_westeurope_v1, l1_metoffice_westeurope_v1 = _build_order_assets(
     name="westeurope",
-    order_id="westeurope-12params-54steps",
+    order_id=WESTEUROPE_ORDER_ID,
     partitions_def=metoffice_westeurope_partitions,
     l0_cron="0 4,10,16,22 * * *",
     process_fn=process_metoffice_westeurope,
@@ -120,7 +121,7 @@ l0_metoffice_westeurope_v1, l1_metoffice_westeurope_v1 = _build_order_assets(
 
 l0_metoffice_india_v1, l1_metoffice_india_v1 = _build_order_assets(
     name="india",
-    order_id="india-11params-54steps",
+    order_id=INDIA_ORDER_ID,
     partitions_def=metoffice_india_partitions,
     l0_cron="0 4,16 * * *",
     process_fn=process_metoffice_india,
@@ -129,7 +130,7 @@ l0_metoffice_india_v1, l1_metoffice_india_v1 = _build_order_assets(
 
 l0_metoffice_ukv_v1, l1_metoffice_ukv_v1 = _build_order_assets(
     name="ukv",
-    order_id="uk-12params-42steps",
+    order_id=UKV_ORDER_ID,
     partitions_def=metoffice_ukv_partitions,
     l0_cron="0 4,7,10,13,16,19,22,1 * * *",
     process_fn=process_metoffice_ukv,

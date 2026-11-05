@@ -7,8 +7,9 @@ from pathlib import Path
 
 import dagster as dg
 import xarray as xr
+from ecmwfmars_data.cli import ENS_NUMBERS, ENS_STEPS, UK_BBOX_NWSE
 from ecmwfmars_data.ens.client import APIException, MarsQueueLimitError, MarsRequest
-from ecmwfmars_data.ens.download import convert_to_dataset
+from ecmwfmars_data.ens.download import _MARS_PARAMETERS, convert_to_dataset
 from ecmwfmars_data.ens.schema import MarsEcmwfEnsSchema
 
 from ocf_dataservices.defs.assets.dynamical import ecmwf_ens_partitions
@@ -22,9 +23,9 @@ from ocf_dataservices.resources.mars import DagsterMarsClient
     pool="ecmwf_mars",
     io_manager_key="l0_io_manager",
     metadata={
-        "bbox_nwse": [62, -12, 48, 3],
-        "steps": list(range(86)),
-        "numbers": list(range(1, 51)),
+        "bbox_nwse": UK_BBOX_NWSE,
+        "steps": ENS_STEPS,
+        "numbers": ENS_NUMBERS,
     },
 )
 def l0_mars_ecmwf_ens_uk_v1(
@@ -67,7 +68,7 @@ def l0_mars_ecmwf_ens_uk_v1(
     if not poll_url:
         try:
             req = MarsRequest.ens(
-                params=["167", "169", "186", "187", "188"],
+                params=_MARS_PARAMETERS,
                 init_time=nwp_init_time,
                 steps=metadata["steps"],
                 bbox_nwse=metadata["bbox_nwse"],

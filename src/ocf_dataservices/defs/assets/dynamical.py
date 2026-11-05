@@ -3,6 +3,7 @@ from typing import Final
 
 import dagster as dg
 import xarray as xr
+from dynamical_data.cli import UK_BBOX_NWSE
 from dynamical_data.ecmwf_ens.download import NwpRunNotYetAvailable, download, open_it
 from dynamical_data.ecmwf_ens.schema import DynamicalEcmwfEnsSchema
 
@@ -32,7 +33,7 @@ _ECMWF_ENS_RETRY_DELAY_SECONDS: Final[int] = 1800
     pool="dynamical",
     metadata={
         "schema": DynamicalEcmwfEnsSchema,
-        "bbox_nwse": [62, -12, 48, 3],
+        "bbox_nwse": list(UK_BBOX_NWSE),
     },
 )
 def l1_dynamical_ecmwf_ens_uk_v1(context: dg.AssetExecutionContext) -> dg.Output[xr.Dataset]:

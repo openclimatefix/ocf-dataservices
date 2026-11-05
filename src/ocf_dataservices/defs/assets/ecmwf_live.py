@@ -5,6 +5,7 @@ from pathlib import Path
 
 import dagster as dg
 import xarray as xr
+from ecmwflive_data.cli import INDIA_BBOX_NWSE, MAX_STEP_HOURS, WEST_EUROPE_BBOX_NWSE
 from ecmwflive_data.download import download_live_ecmwf_partition, get_completed_init_times
 from ecmwflive_data.processing import process_ecmwf_live_validated
 from ecmwflive_data.schema import EcmwfLiveSchema
@@ -118,8 +119,8 @@ def l0_ecmwf_live_local_v1(context: dg.AssetExecutionContext) -> dg.Output[Path]
     io_manager_key="l1_io_manager",
     pool="ECMWF",
     metadata={
-        "bbox_nwse": [63, -12, 35, 26],
-        "max_step_hours": 84,
+        "bbox_nwse": WEST_EUROPE_BBOX_NWSE,
+        "max_step_hours": MAX_STEP_HOURS,
         "schema": EcmwfLiveSchema,
     },
     automation_condition=dg.AutomationCondition.eager(),
@@ -145,8 +146,8 @@ def l1_ecmwf_live_west_europe_v1(
     io_manager_key="l1_io_manager",
     pool="ECMWF",
     metadata={
-        "bbox_nwse": [35, 67, 6, 97],
-        "max_step_hours": 84,
+        "bbox_nwse": INDIA_BBOX_NWSE,
+        "max_step_hours": MAX_STEP_HOURS,
         "schema": EcmwfLiveSchema,
     },
     automation_condition=dg.AutomationCondition.eager(),
