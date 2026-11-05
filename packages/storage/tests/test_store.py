@@ -112,11 +112,11 @@ class TestStorageAndCli(unittest.TestCase):
                     dt.datetime(2026, 4, 8, 6, 0, tzinfo=dt.UTC),
                 ],
             )
-            # Standalone CLI does not write stats_spatial or stats_temporal by default
+            # Standalone CLI does not write stats by default
             repo, _ = open_icechunk_repo(store_path)
             session = repo.readonly_session(branch="main")
             with self.assertRaises((KeyError, ValueError, FileNotFoundError)):
-                xr.open_zarr(session.store, group="stats_spatial", consolidated=False)
+                xr.open_zarr(session.store, group="stats", consolidated=False)
 
     def test_invalid_uri_and_bad_partition_key_raise(self) -> None:
         with self.assertRaises(ValueError):
@@ -131,6 +131,71 @@ class TestStorageAndCli(unittest.TestCase):
             parser = build_parser("demo-data", products)
             args = parser.parse_args(["--store-path", "/tmp/x", "--init-time", "2026-04-08T00:00"])
             self.assertEqual(args.step_hours, 6)
+
+    def test_monthly_stats_exact_known_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store_path = f"{tmp}/exact_stats_store"
+            dims = _TestSchema.dims()
+            coords_common = {
+                "step": np.array([np.timedelta64(0, "h"), np.timedelta64(1, "h")]),
+                "latitude": np.array([50.0], dtype=np.float64),
+                "longitude": np.array([-1.0, 0.0], dtype=np.float64),
+            }
+
+            # Write 1 (2026-04-01T00:00):
+            #   lon=-1 has [10, 20] -> count=2, mean=15, std=5, min=10, max=20
+            #   lon=0  has [2, 4]   -> count=2, mean=3,  std=1, min=2,  max=4
+            ds1 = xr.Dataset(
+                data_vars={
+                    "temperature_2m": (
+                        dims,
+                        np.array([[[[10.0, 2.0]], [[20.0, 4.0]]]], dtype=np.float32),
+                    )
+                },
+                coords={"init_time": np.array(["2026-04-01T00:00"], dtype="datetime64[ns]")}
+                | coords_common,
+            )
+            write_to_icechunk(
+                ds1, _TestSchema, store_path, keep_mantissa_bits=None, write_stats=True
+            )
+
+            # Write 2 (2026-04-15T12:00, same month):
+            #   lon=-1 adds [30, 40]  -> combined [10, 20, 30, 40]:
+            #       count=4, mean=25, std=sqrt(125)=11.18034, min=10, max=40
+            #   lon=0  adds [10, NaN] -> combined [2, 4, 10]:
+            #       count=3, mean=16/3=5.3333335, std=sqrt(104)/3=3.3993463, min=2, max=10
+            ds2 = xr.Dataset(
+                data_vars={
+                    "temperature_2m": (
+                        dims,
+                        np.array([[[[30.0, 10.0]], [[40.0, np.nan]]]], dtype=np.float32),
+                    )
+                },
+                coords={"init_time": np.array(["2026-04-15T12:00"], dtype="datetime64[ns]")}
+                | coords_common,
+            )
+            write_to_icechunk(
+                ds2, _TestSchema, store_path, keep_mantissa_bits=None, write_stats=True
+            )
+
+            repo, _ = open_icechunk_repo(store_path)
+            session = repo.readonly_session(branch="main")
+            stats_da = (
+                xr.open_zarr(session.store, group="stats", consolidated=False)["temperature_2m"]
+                .sel(month="2026-04-01", latitude=50.0)
+            )
+
+            np.testing.assert_allclose(stats_da.sel(stat="count").values, [4.0, 3.0], rtol=1e-6)
+            np.testing.assert_allclose(
+                stats_da.sel(stat="mean").values, [25.0, 16.0 / 3.0], rtol=1e-6
+            )
+            np.testing.assert_allclose(
+                stats_da.sel(stat="std").values,
+                [np.sqrt(125.0), np.sqrt(104.0) / 3.0],
+                rtol=1e-6,
+            )
+            np.testing.assert_allclose(stats_da.sel(stat="min").values, [10.0, 2.0], rtol=1e-6)
+            np.testing.assert_allclose(stats_da.sel(stat="max").values, [40.0, 10.0], rtol=1e-6)
 
 
 if __name__ == "__main__":

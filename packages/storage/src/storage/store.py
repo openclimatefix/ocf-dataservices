@@ -13,7 +13,7 @@ import zarr.codecs
 from schemas.base import NwpDatasetSchema
 
 SPATIAL_DIMS = ("latitude", "longitude", "y_laea", "x_laea")
-STATS = ("mean", "std", "min", "max")
+STATS = ("count", "mean", "std", "min", "max")
 
 
 @dataclass(frozen=True)
@@ -25,41 +25,76 @@ class WriteResult:
     skip_write: bool
     size_bytes: int
     written_dims: dict[str, int]
-    spatial_stats: xr.Dataset | None
-    temporal_stats: xr.Dataset | None
+    stats: xr.Dataset | None
 
 
-def _compute_stats_reduction(
+def _compute_monthly_stats(
     ds: xr.Dataset,
-    reduce_dims: list[str],
     append_dim: str,
 ) -> xr.Dataset | None:
-    if not reduce_dims:
+    reduce_dims = [str(d) for d in ds.dims if d not in SPATIAL_DIMS]
+    if not reduce_dims or ds.sizes.get(append_dim, 0) == 0:
         return None
+
+    months = ds[append_dim].values.astype("datetime64[M]").astype("datetime64[ns]")
+    unique_months = np.unique(months)
+    stat_coord = xr.DataArray(list(STATS), dims="stat", name="stat")
+    remaining_dims = [str(d) for d in ds.dims if d not in reduce_dims]
+    target_dims = ["month", "stat", *remaining_dims]
+
+    month_datasets: list[xr.Dataset] = []
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
-        parts = [
-            ds.mean(dim=reduce_dims, skipna=True),
-            ds.std(dim=reduce_dims, skipna=True),
-            ds.min(dim=reduce_dims, skipna=True),
-            ds.max(dim=reduce_dims, skipna=True),
-        ]
+        for month_val in unique_months:
+            ds_m = ds.isel({append_dim: months == month_val})
+            parts = [
+                ds_m.count(dim=reduce_dims).astype(np.float32),
+                ds_m.mean(dim=reduce_dims, skipna=True).astype(np.float32),
+                ds_m.std(dim=reduce_dims, skipna=True).astype(np.float32),
+                ds_m.min(dim=reduce_dims, skipna=True).astype(np.float32),
+                ds_m.max(dim=reduce_dims, skipna=True).astype(np.float32),
+            ]
+            reduced_m = xr.concat(parts, dim=stat_coord).expand_dims(
+                month=np.array([month_val], dtype="datetime64[ns]")
+            )
+            month_datasets.append(reduced_m.transpose(*target_dims).astype(np.float32))
+
+    return xr.concat(month_datasets, dim="month")
+
+
+def _merge_monthly_stats(existing: xr.Dataset, incoming: xr.Dataset) -> xr.Dataset:
+    """Combine two single-month stats datasets (`count`, `mean`, `std`, `min`, `max`)."""
+    n_a = existing.sel(stat="count")
+    n_b = incoming.sel(stat="count")
+    n = n_a + n_b
+    safe_n = xr.where(n > 0, n, 1.0)
+
+    mean_a = xr.where(n_a > 0, existing.sel(stat="mean"), 0.0)
+    mean_b = xr.where(n_b > 0, incoming.sel(stat="mean"), 0.0)
+    std_a = xr.where(n_a > 0, existing.sel(stat="std"), 0.0)
+    std_b = xr.where(n_b > 0, incoming.sel(stat="std"), 0.0)
+
+    delta = mean_b - mean_a
+    mean = xr.where(n > 0, mean_a + delta * (n_b / safe_n), np.nan)
+    m2 = n_a * (std_a**2) + n_b * (std_b**2) + (delta**2) * (n_a * n_b / safe_n)
+    std = xr.where(n > 0, np.sqrt(np.maximum(m2 / safe_n, 0.0)), np.nan)
+    min_ = np.fmin(existing.sel(stat="min"), incoming.sel(stat="min"))
+    max_ = np.fmax(existing.sel(stat="max"), incoming.sel(stat="max"))
+
     stat_coord = xr.DataArray(list(STATS), dims="stat", name="stat")
-    reduced = xr.concat(parts, dim=stat_coord)
-    remaining_dims = [str(d) for d in ds.dims if d not in reduce_dims]
-    target_dims = [append_dim, "stat"] + [d for d in remaining_dims if d != append_dim]
-    return reduced.transpose(*target_dims).astype(np.float32)
+    merged = xr.concat([n, mean, std, min_, max_], dim=stat_coord)
+    return merged.transpose(*existing.dims).astype(np.float32)
 
 
 def _write_stats_group(
     store: icechunk.IcechunkStore,
     reduced: xr.Dataset | None,
-    group: str,
-    append_dim: str,
-    deduplicate: bool,
+    skip_root_write: bool,
 ) -> bool:
     if reduced is None:
         return False
+
+    group = "stats"
     group_exists = False
     existing_group = None
     try:
@@ -68,58 +103,75 @@ def _write_stats_group(
     except Exception:  # noqa: BLE001
         group_exists = False
 
-    if deduplicate and group_exists and existing_group is not None:
-        existing_times = existing_group[append_dim].values.astype("datetime64[ns]")
-        incoming_times = reduced[append_dim].values.astype("datetime64[ns]")
-        is_new = ~np.isin(incoming_times, existing_times)
-        if not is_new.any():
-            return False
-        reduced_to_write = reduced.isel({append_dim: is_new}).sortby(append_dim)
+    if not group_exists or existing_group is None:
+        reduced_to_write = reduced.sortby("month")
         reduced_to_write.to_zarr(
             store,
             group=group,
-            mode="a",
-            append_dim=append_dim,
+            zarr_format=3,
+            mode="w-",
             write_empty_chunks=False,
+            encoding={
+                var: {
+                    "dtype": "float32",
+                    "chunks": tuple(
+                        1 if d == "month" else reduced_to_write.coords[d].size
+                        for d in reduced_to_write.dims
+                    ),
+                    "compressors": zarr.codecs.BloscCodec(
+                        cname="zstd",
+                        clevel=3,
+                        shuffle="bitshuffle",
+                    ),
+                }
+                for var in reduced_to_write.data_vars
+            }
+            | {
+                coord: {"chunks": 10000}
+                for coord in reduced_to_write.coords
+                if coord not in reduced_to_write.dims
+            }
+            | {
+                "month": {
+                    "dtype": int,
+                    "units": "nanoseconds since 1970-01-01",
+                    "calendar": "proleptic_gregorian",
+                    "chunks": 10000,
+                }
+            },
         )
         return True
 
-    reduced_to_write = reduced.sortby(append_dim) if deduplicate else reduced
-    reduced_to_write.to_zarr(
-        store,
-        group=group,
-        zarr_format=3,
-        mode="w-",
-        write_empty_chunks=False,
-        encoding={
-            var: {
-                "dtype": "float32",
-                "chunks": tuple(
-                    1 if d == append_dim else reduced_to_write.coords[d].size
-                    for d in reduced_to_write.dims
-                ),
-                "compressors": zarr.codecs.BloscCodec(
-                    cname="zstd",
-                    clevel=3,
-                    shuffle="bitshuffle",
-                ),
-            }
-            for var in reduced_to_write.data_vars
-        }
-        | {
-            coord: {"chunks": 10000}
-            for coord in reduced_to_write.coords
-            if coord not in reduced_to_write.dims
-        }
-        | {
-            append_dim: {
-                "dtype": int,
-                "units": "nanoseconds since 1970-01-01",
-                "calendar": "proleptic_gregorian",
-                "chunks": 10000,
-            }
-        },
-    )
+    if skip_root_write:
+        return False
+
+    existing_months = existing_group["month"].values.astype("datetime64[ns]")
+    incoming_sorted = reduced.sortby("month")
+    non_month_coords = [c for c in incoming_sorted.coords if c != "month"]
+
+    for i in range(incoming_sorted.sizes["month"]):
+        inc_m = incoming_sorted.isel(month=slice(i, i + 1))
+        month_val = inc_m["month"].values.astype("datetime64[ns]")[0]
+        matches = np.nonzero(existing_months == month_val)[0]
+        if matches.size > 0:
+            idx = int(matches[0])
+            ex_m = existing_group.isel(month=slice(idx, idx + 1)).compute()
+            merged_m = _merge_monthly_stats(ex_m, inc_m)
+            merged_m.drop_vars(non_month_coords).to_zarr(
+                store,
+                group=group,
+                region={"month": slice(idx, idx + 1)},
+            )
+        else:
+            inc_m.to_zarr(
+                store,
+                group=group,
+                mode="a",
+                append_dim="month",
+                write_empty_chunks=False,
+            )
+            existing_months = np.append(existing_months, month_val)
+
     return True
 
 
@@ -274,13 +326,6 @@ def write_to_icechunk(
             )
 
     append_dim = schema.append_dim()
-    spatial_stats: xr.Dataset | None = None
-    temporal_stats: xr.Dataset | None = None
-    if write_stats:
-        spatial_dims = [str(d) for d in ds.dims if d in SPATIAL_DIMS]
-        temporal_dims = [str(d) for d in ds.dims if d != append_dim and d not in SPATIAL_DIMS]
-        spatial_stats = _compute_stats_reduction(ds, spatial_dims, append_dim)
-        temporal_stats = _compute_stats_reduction(ds, temporal_dims, append_dim)
 
     obj = ds
     if keep_mantissa_bits is not None:
@@ -320,6 +365,7 @@ def write_to_icechunk(
             dataset_exists = False
 
         obj_to_write = obj
+        ds_for_stats = ds
         skip_write = False
 
         if deduplicate and dataset_exists and existing_ds is not None:
@@ -331,6 +377,7 @@ def write_to_icechunk(
                 skip_write = True
             else:
                 obj_to_write = obj.isel({append_dim: is_new}).sortby(append_dim)
+                ds_for_stats = ds.isel({append_dim: is_new}).sortby(append_dim)
                 obj_to_write.to_zarr(
                     session.store,
                     mode="a",
@@ -373,22 +420,12 @@ def write_to_icechunk(
                 },
             )
 
-        wrote_spatial = _write_stats_group(
-            session.store,
-            spatial_stats,
-            "stats_spatial",
-            append_dim,
-            deduplicate,
-        )
-        wrote_temporal = _write_stats_group(
-            session.store,
-            temporal_stats,
-            "stats_temporal",
-            append_dim,
-            deduplicate,
-        )
+        stats: xr.Dataset | None = None
+        if write_stats:
+            stats = _compute_monthly_stats(ds_for_stats, append_dim)
+        wrote_stats = _write_stats_group(session.store, stats, skip_write)
 
-        if not skip_write or wrote_spatial or wrote_temporal:
+        if not skip_write or wrote_stats:
             msg = commit_message or f"icechunk write at {dt.datetime.now(dt.UTC)}"
             commit_hash = str(session.commit(msg))
         else:
@@ -407,6 +444,5 @@ def write_to_icechunk(
         skip_write=skip_write,
         size_bytes=size_bytes,
         written_dims=written_dims,
-        spatial_stats=spatial_stats,
-        temporal_stats=temporal_stats,
+        stats=stats,
     )
