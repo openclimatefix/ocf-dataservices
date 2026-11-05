@@ -88,7 +88,7 @@ def _make_partition_ds(init_time_str: str, base_val: float) -> xr.Dataset:
 
 
 class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
-    def test_writes_and_appends_spatial_and_temporal_stats_groups(self):
+    def test_writes_and_collates_monthly_stats_group(self):
         with tempfile.TemporaryDirectory() as tmp:
             io_manager = XarrayIcechunkIOManager(path=tmp, keep_mantissa_bits=None)
             asset_key = dg.AssetKey(["nwp", "l1_dummy_v1"])
@@ -105,6 +105,7 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
             self.assertIn("stats_overview", logged_meta)
             self.assertIn("data:image/svg+xml;base64,", logged_meta["stats_overview"].md_str)
 
+            # Second partition in the SAME month (April 2024) -> merges into month 2024-04-01
             ds2 = _make_partition_ds("2024-04-01T06:00", 20.0)
             ctx2 = dg.build_output_context(
                 asset_key=asset_key,
@@ -113,7 +114,7 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
             )
             io_manager.handle_output(ctx2, ds2)
 
-            # Duplicate write should be skipped without duplicating stats
+            # Duplicate write should be skipped without double-counting into monthly stats
             ctx2_dup = dg.build_output_context(
                 asset_key=asset_key,
                 partition_key="2024-04-01T06:00",
@@ -121,42 +122,78 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
             )
             io_manager.handle_output(ctx2_dup, ds2)
 
+            # Third partition in a NEW month (May 2024) -> appends month 2024-05-01
+            ds3 = _make_partition_ds("2024-05-01T00:00", 30.0)
+            ctx3 = dg.build_output_context(
+                asset_key=asset_key,
+                partition_key="2024-05-01T00:00",
+                definition_metadata={"schema": _DummySchema},
+            )
+            io_manager.handle_output(ctx3, ds3)
+
             store_path = f"{tmp}/nwp/l1_dummy_v1"
             repo = icechunk.Repository.open(icechunk.local_filesystem_storage(store_path))
             session = repo.readonly_session(branch="main")
 
             root_ds = xr.open_zarr(session.store, consolidated=False)
-            spatial_ds = xr.open_zarr(session.store, group="stats_spatial", consolidated=False)
-            temporal_ds = xr.open_zarr(session.store, group="stats_temporal", consolidated=False)
+            stats_ds = xr.open_zarr(session.store, group="stats", consolidated=False)
+
+            with self.assertRaises((KeyError, ValueError, FileNotFoundError)):
+                xr.open_zarr(session.store, group="stats_spatial", consolidated=False)
 
             self.assertEqual(list(root_ds.data_vars), ["temperature_2m"])
-            self.assertEqual(dict(root_ds.sizes), {"init_time": 2, "step": 2, "latitude": 2, "longitude": 3})
-
-            self.assertEqual(dict(spatial_ds.sizes), {"init_time": 2, "stat": 4, "step": 2})
-            self.assertEqual(list(spatial_ds.coords["stat"].values), ["mean", "std", "min", "max"])
+            self.assertEqual(
+                dict(root_ds.sizes),
+                {"init_time": 3, "step": 2, "latitude": 2, "longitude": 3},
+            )
 
             self.assertEqual(
-                dict(temporal_ds.sizes),
-                {"init_time": 2, "stat": 4, "latitude": 2, "longitude": 3},
+                dict(stats_ds.sizes),
+                {"month": 2, "stat": 5, "latitude": 2, "longitude": 3},
             )
-            self.assertEqual(list(temporal_ds.coords["stat"].values), ["mean", "std", "min", "max"])
+            self.assertEqual(
+                list(stats_ds.coords["stat"].values),
+                ["count", "mean", "std", "min", "max"],
+            )
+            np.testing.assert_array_equal(
+                stats_ds.coords["month"].values,
+                np.array(["2024-04-01", "2024-05-01"], dtype="datetime64[ns]"),
+            )
 
-            full = xr.concat([ds1, ds2], dim="init_time")
+            april_full = xr.concat([ds1, ds2], dim="init_time")
+            april_stats = stats_ds["temperature_2m"].sel(month="2024-04-01")
             np.testing.assert_allclose(
-                spatial_ds["temperature_2m"].sel(stat="mean").values,
-                full["temperature_2m"].mean(dim=["latitude", "longitude"]).values,
+                april_stats.sel(stat="count").values,
+                np.full((2, 3), 4.0, dtype=np.float32),
             )
             np.testing.assert_allclose(
-                spatial_ds["temperature_2m"].sel(stat="std").values,
-                full["temperature_2m"].std(dim=["latitude", "longitude"]).values,
+                april_stats.sel(stat="mean").values,
+                april_full["temperature_2m"].mean(dim=["init_time", "step"]).values,
+                rtol=1e-5,
             )
             np.testing.assert_allclose(
-                temporal_ds["temperature_2m"].sel(stat="mean").values,
-                full["temperature_2m"].mean(dim=["step"]).values,
+                april_stats.sel(stat="std").values,
+                april_full["temperature_2m"].std(dim=["init_time", "step"]).values,
+                rtol=1e-5,
             )
             np.testing.assert_allclose(
-                temporal_ds["temperature_2m"].sel(stat="max").values,
-                full["temperature_2m"].max(dim=["step"]).values,
+                april_stats.sel(stat="min").values,
+                april_full["temperature_2m"].min(dim=["init_time", "step"]).values,
+            )
+            np.testing.assert_allclose(
+                april_stats.sel(stat="max").values,
+                april_full["temperature_2m"].max(dim=["init_time", "step"]).values,
+            )
+
+            may_stats = stats_ds["temperature_2m"].sel(month="2024-05-01")
+            np.testing.assert_allclose(
+                may_stats.sel(stat="count").values,
+                np.full((2, 3), 2.0, dtype=np.float32),
+            )
+            np.testing.assert_allclose(
+                may_stats.sel(stat="mean").values,
+                ds3["temperature_2m"].mean(dim=["init_time", "step"]).values,
+                rtol=1e-5,
             )
 
     def test_backfills_stats_on_existing_store_with_ensemble_and_projected_coords(self):
@@ -179,13 +216,13 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
                 },
             )
 
-            # Simulate pre-existing store with root data only (no stats groups yet)
+            # Simulate pre-existing store with root data only (no stats group yet)
             repo = icechunk.Repository.create(icechunk.local_filesystem_storage(store_path))
             s0 = repo.writable_session(branch="main")
             ds.to_zarr(s0.store, zarr_format=3, mode="w-")
             s0.commit("legacy root write")
 
-            # Re-running the same partition should backfill stats_spatial & stats_temporal
+            # Re-running the same partition should backfill stats
             # and compute stats before 14-bit Veltkamp rounding
             io_manager = XarrayIcechunkIOManager(path=tmp, keep_mantissa_bits=14)
             ctx = dg.build_output_context(
@@ -196,21 +233,17 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
             io_manager.handle_output(ctx, ds)
 
             ro = repo.readonly_session(branch="main")
-            spatial_ds = xr.open_zarr(ro.store, group="stats_spatial", consolidated=False)
-            temporal_ds = xr.open_zarr(ro.store, group="stats_temporal", consolidated=False)
+            stats_ds = xr.open_zarr(ro.store, group="stats", consolidated=False)
 
             self.assertEqual(
-                dict(spatial_ds.sizes),
-                {"init_time": 1, "stat": 4, "step": 2, "ensemble_member": 2},
-            )
-            self.assertEqual(
-                dict(temporal_ds.sizes),
-                {"init_time": 1, "stat": 4, "y_laea": 2, "x_laea": 3},
+                dict(stats_ds.sizes),
+                {"month": 1, "stat": 5, "y_laea": 2, "x_laea": 3},
             )
             np.testing.assert_allclose(
-                temporal_ds["pressure_reduced_to_mean_sea_level"].sel(stat="std").values,
+                stats_ds["pressure_reduced_to_mean_sea_level"].sel(stat="std").values,
                 ds["pressure_reduced_to_mean_sea_level"]
-                .std(dim=["step", "ensemble_member"])
+                .std(dim=["init_time", "step", "ensemble_member"])
+                .broadcast_like(stats_ds["pressure_reduced_to_mean_sea_level"].sel(stat="std"))
                 .values,
             )
 
