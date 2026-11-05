@@ -43,7 +43,7 @@ lint:
 
 .PHONY: test
 test:
-	@uv run python -m unittest `find packages -name "test_*.py"`
+	@uv run python -m unittest `find packages tests -name "test_*.py"`
 
 .PHONY: clean
 clean:
