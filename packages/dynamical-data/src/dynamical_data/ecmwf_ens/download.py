@@ -143,9 +143,10 @@ def _to_dataset(data_arrays: dict[str, xr.DataArray], ds_sliced: xr.Dataset) -> 
     var_rename = {"precipitation_surface": "total_precipitation_rate"}
     renamed_vars = {var_rename.get(k, k): v.variable for k, v in data_arrays.items()}
 
+    ordered_dims = DynamicalEcmwfEnsSchema.dims()
     ds = xr.Dataset(
         data_vars=renamed_vars,
-        coords={c: ds_sliced.coords[c].variable for c in ds_sliced.coords},
+        coords={c: ds_sliced.coords[c].variable for c in ordered_dims if c in ds_sliced.coords},
     )
     if "ensemble_member" in ds.coords:
         ds["ensemble_member"] = ds["ensemble_member"].astype(np.int16)

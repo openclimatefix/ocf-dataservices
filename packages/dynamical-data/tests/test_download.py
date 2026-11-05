@@ -60,6 +60,7 @@ def _mock_catalog_dataset() -> xr.Dataset:
             "ensemble_member": np.array([0, 1, 2], dtype=np.int64),
             "latitude": np.array([55.0, 50.0], dtype=np.float64),
             "longitude": np.array([-5.0, 0.0], dtype=np.float64),
+            "expected_forecast_length": np.timedelta64(360, "h"),
         },
     )
 
