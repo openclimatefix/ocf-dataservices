@@ -1,6 +1,6 @@
 import tempfile
 import unittest
-from typing import ClassVar
+from typing import Any, ClassVar, cast
 
 import dagster as dg
 import icechunk
@@ -94,23 +94,26 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
             asset_key = dg.AssetKey(["nwp", "l1_dummy_v1"])
 
             ds1 = _make_partition_ds("2024-04-01T00:00", 10.0)
+            dummy_meta = cast(dict[str, Any], {"schema": _DummySchema})
             ctx1 = dg.build_output_context(
                 asset_key=asset_key,
                 partition_key="2024-04-01T00:00",
-                definition_metadata={"schema": _DummySchema},
+                definition_metadata=dummy_meta,
             )
             io_manager.handle_output(ctx1, ds1)
             logged_meta = ctx1.get_logged_metadata()
             self.assertIn("stats_summary", logged_meta)
             self.assertIn("stats_overview", logged_meta)
-            self.assertIn("data:image/svg+xml;base64,", logged_meta["stats_overview"].md_str)
+            overview = logged_meta["stats_overview"]
+            assert isinstance(overview, dg.MarkdownMetadataValue)
+            self.assertIn("data:image/svg+xml;base64,", overview.md_str or "")
 
             # Second partition in the SAME month (April 2024) -> merges into month 2024-04-01
             ds2 = _make_partition_ds("2024-04-01T06:00", 20.0)
             ctx2 = dg.build_output_context(
                 asset_key=asset_key,
                 partition_key="2024-04-01T06:00",
-                definition_metadata={"schema": _DummySchema},
+                definition_metadata=dummy_meta,
             )
             io_manager.handle_output(ctx2, ds2)
 
@@ -118,7 +121,7 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
             ctx2_dup = dg.build_output_context(
                 asset_key=asset_key,
                 partition_key="2024-04-01T06:00",
-                definition_metadata={"schema": _DummySchema},
+                definition_metadata=dummy_meta,
             )
             io_manager.handle_output(ctx2_dup, ds2)
 
@@ -127,7 +130,7 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
             ctx3 = dg.build_output_context(
                 asset_key=asset_key,
                 partition_key="2024-05-01T00:00",
-                definition_metadata={"schema": _DummySchema},
+                definition_metadata=dummy_meta,
             )
             io_manager.handle_output(ctx3, ds3)
 
@@ -228,7 +231,7 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
             ctx = dg.build_output_context(
                 asset_key=asset_key,
                 partition_key="2024-04-01T00:00",
-                definition_metadata={"schema": _EnsembleProjectedSchema},
+                definition_metadata=cast(dict[str, Any], {"schema": _EnsembleProjectedSchema}),
             )
             io_manager.handle_output(ctx, ds)
 

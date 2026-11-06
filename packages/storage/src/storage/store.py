@@ -32,6 +32,7 @@ def _compute_monthly_stats(
     ds: xr.Dataset,
     append_dim: str,
 ) -> xr.Dataset | None:
+    """Computes statistics (count, mean, std, min, max) for each month in `ds` along `append_dim`."""
     reduce_dims = [str(d) for d in ds.dims if d not in SPATIAL_DIMS]
     if not reduce_dims or ds.sizes.get(append_dim, 0) == 0:
         return None
@@ -78,8 +79,12 @@ def _merge_monthly_stats(existing: xr.Dataset, incoming: xr.Dataset) -> xr.Datas
     mean = xr.where(n > 0, mean_a + delta * (n_b / safe_n), np.nan)
     m2 = n_a * (std_a**2) + n_b * (std_b**2) + (delta**2) * (n_a * n_b / safe_n)
     std = xr.where(n > 0, np.sqrt(np.maximum(m2 / safe_n, 0.0)), np.nan)
-    min_ = np.fmin(existing.sel(stat="min"), incoming.sel(stat="min"))
-    max_ = np.fmax(existing.sel(stat="max"), incoming.sel(stat="max"))
+    min_ = xr.concat([existing.sel(stat="min"), incoming.sel(stat="min")], dim="_pair").min(
+        dim="_pair", skipna=True
+    )
+    max_ = xr.concat([existing.sel(stat="max"), incoming.sel(stat="max")], dim="_pair").max(
+        dim="_pair", skipna=True
+    )
 
     stat_coord = xr.DataArray(list(STATS), dims="stat", name="stat")
     merged = xr.concat([n, mean, std, min_, max_], dim=stat_coord)
@@ -91,6 +96,7 @@ def _write_stats_group(
     reduced: xr.Dataset | None,
     skip_root_write: bool,
 ) -> bool:
+    """Write the monthly stats dataset to the `stats` group in the Icechunk store."""
     if reduced is None:
         return False
 
