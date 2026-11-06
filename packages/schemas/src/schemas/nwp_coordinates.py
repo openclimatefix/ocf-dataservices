@@ -40,6 +40,14 @@ def y_laea(ge: float = -2e6, le: float = 2e6) -> Any:
     return pa.Field(dims=("y_laea",), nullable=False, ge=ge, le=le)
 
 
+def x_osgb(ge: float = -2e6, le: float = 2e6) -> Any:
+    return pa.Field(dims=("x_osgb",), nullable=False, ge=ge, le=le)
+
+
+def y_osgb(ge: float = -2e6, le: float = 2e6) -> Any:
+    return pa.Field(dims=("y_osgb",), nullable=False, ge=ge, le=le)
+
+
 def grid_first_lat() -> Any:
     """Latitude of first grid point in degrees from the raw GRIB grid definition."""
     return pa.Field(dims=("init_time",), nullable=True, ge=-90, le=90)

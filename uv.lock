@@ -9,6 +9,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "ceda-data",
     "dynamical-data",
     "ecmwflive-data",
     "ecmwfmars-data",
@@ -243,6 +244,27 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b9/cc/7f84a5d3071fe878380e9f610ab36ca87b8cbbc4aa81ba2727f90e1f3ea3/botocore-1.43.56.tar.gz", hash = "sha256:6c01f85f0ff9863076f4c761e74ee3aa96c5ccc1ad09fc1efd62ef8f2d22bf57", size = 15733117, upload-time = "2026-07-24T19:31:38.125Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5c/cd/86fe9e659e9699f62f8dd5ecd8c6725474334b23cab8aa71d82b5f56f1a4/botocore-1.43.56-py3-none-any.whl", hash = "sha256:aafc741f1b10f6fd63253eaf6ea029680c1ff436d87e1b8969d62aefa0c76976", size = 15418773, upload-time = "2026-07-24T19:31:34.758Z" },
+]
+
+[[package]]
+name = "ceda-data"
+version = "0.1.0"
+source = { editable = "packages/ceda-data" }
+dependencies = [
+    { name = "cfgrib" },
+    { name = "pandera" },
+    { name = "schemas" },
+    { name = "storage" },
+    { name = "xarray" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cfgrib" },
+    { name = "pandera" },
+    { name = "schemas", editable = "packages/schemas" },
+    { name = "storage", editable = "packages/storage" },
+    { name = "xarray" },
 ]
 
 [[package]]
@@ -1734,6 +1756,7 @@ name = "ocf-dataservices"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "ceda-data" },
     { name = "dagster" },
     { name = "dagster-docker" },
     { name = "dagster-postgres" },
@@ -1760,6 +1783,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "ceda-data", editable = "packages/ceda-data" },
     { name = "dagster", specifier = ">=1.12.11" },
     { name = "dagster-docker", specifier = ">=0.28.11" },
     { name = "dagster-postgres", specifier = ">=0.28.11" },

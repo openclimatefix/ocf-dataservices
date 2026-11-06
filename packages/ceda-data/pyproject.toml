@@ -1,0 +1,23 @@
+[project]
+name = "ceda-data"
+version = "0.1.0"
+description = "MetOffice UKV and Global NWP archive data from CEDA"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "cfgrib",
+    "pandera",
+    "schemas",
+    "storage",
+    "xarray",
+]
+
+[project.scripts]
+ceda-data = "ceda_data.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ceda_data"]
