@@ -56,8 +56,10 @@ class MarsRequest:
         expver: int = 1,
         levtype: str = "sfc",
         grid: str = "0.1/0.1",
+        stream: str | None = None,
     ) -> MarsRequest:
         """Create a new request for High Resolution (HRES) operational data."""
+        resolved_stream = stream or ("oper" if init_time.hour in (0, 12) else "scda")
         return cls(
             params=params,
             init_time=init_time,
@@ -67,7 +69,7 @@ class MarsRequest:
             classification=classification,
             expver=expver,
             levtype=levtype,
-            stream="oper",
+            stream=resolved_stream,
             grid=grid,
             number=None,
         )

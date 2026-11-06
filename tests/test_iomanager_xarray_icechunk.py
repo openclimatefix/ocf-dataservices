@@ -6,6 +6,8 @@ import dagster as dg
 import icechunk
 import numpy as np
 import xarray as xr
+from ecmwflive_data.schema import EcmwfLiveSchema
+from ecmwfmars_data.hres.schema import MarsEcmwfHresSchema
 from pandera.typing.xarray import Coordinate
 from schemas import (
     NwpDatasetSchema,
@@ -249,6 +251,18 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
                 .broadcast_like(stats_ds["pressure_reduced_to_mean_sea_level"].sel(stat="std"))
                 .values,
             )
+
+    def test_mars_hres_schema_matches_ecmwf_live_schema(self):
+        live_schema = EcmwfLiveSchema.to_schema()
+        mars_schema = MarsEcmwfHresSchema.to_schema()
+        self.assertEqual(MarsEcmwfHresSchema.dims(), EcmwfLiveSchema.dims())
+        self.assertEqual(MarsEcmwfHresSchema._chunks, EcmwfLiveSchema._chunks)
+        self.assertEqual(MarsEcmwfHresSchema._shards, EcmwfLiveSchema._shards)
+        self.assertEqual(set((mars_schema.coords or {}).keys()), set((live_schema.coords or {}).keys()))
+        self.assertEqual(
+            set((mars_schema.data_vars or {}).keys()),
+            set((live_schema.data_vars or {}).keys()),
+        )
 
 
 if __name__ == "__main__":
