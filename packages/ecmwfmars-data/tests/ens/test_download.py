@@ -13,6 +13,9 @@ from ecmwfmars_data.ens.download import convert_to_dataset, download_raw
 class TestDownload(unittest.TestCase):
     def test_download_raw(self):
         client = MagicMock(spec=MarsClient)
+        client.execute.side_effect = lambda _req, f: f.write(
+            b"GRIB" + b"\x00" * 100_000 + b"7777"
+        )
         init_time = dt.datetime(2023, 1, 1, 0, 0, tzinfo=dt.UTC)
         bbox_nwse = [60, -10, 50, 5]
         steps = [0, 3, 6]

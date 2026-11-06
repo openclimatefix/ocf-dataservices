@@ -10,7 +10,7 @@ from pandera.typing.xarray import Coordinate
 from schemas import (
     NwpDatasetSchema,
     ensemble_member,
-    init_time,
+    init_time_coord,
     latitude,
     longitude,
     pressure_reduced_to_mean_sea_level,
@@ -40,7 +40,7 @@ class _EnsembleProjectedSchema(NwpDatasetSchema):
         "x_laea": -1,
     }
 
-    init_time: Coordinate[np.datetime64] = init_time()
+    init_time: Coordinate[np.datetime64] = init_time_coord()
     step: Coordinate[np.timedelta64] = step(ge_hours=0, le_hours=6)
     ensemble_member: Coordinate[np.int16] = ensemble_member(ge=1, le=2)
     y_laea: Coordinate[np.float64] = y_laea(ge=-576000, le=700000)
@@ -65,7 +65,7 @@ class _DummySchema(NwpDatasetSchema):
         "longitude": -1,
     }
 
-    init_time: Coordinate[np.datetime64] = init_time()
+    init_time: Coordinate[np.datetime64] = init_time_coord()
     step: Coordinate[np.timedelta64] = step(ge_hours=0, le_hours=6)
     latitude: Coordinate[np.float64] = latitude()
     longitude: Coordinate[np.float64] = longitude()

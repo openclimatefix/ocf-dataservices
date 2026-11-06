@@ -7,7 +7,6 @@ from pandera.typing.xarray import Coordinate
 from schemas.base import NwpDatasetSchema
 from schemas.nwp_coordinates import (
     ensemble_member,
-    init_time,
     init_time_coord,
     latitude,
     longitude,
@@ -47,7 +46,7 @@ class DynamicalEcmwfEnsSchema(NwpDatasetSchema):
     _dims = ("init_time", "step", "ensemble_member", "latitude", "longitude")
 
     # Dimensions
-    init_time: Coordinate[np.datetime64] = init_time()
+    init_time: Coordinate[np.datetime64] = init_time_coord()
     step: Coordinate[np.timedelta64] = step(ge_hours=0, le_hours=85)
     ensemble_member: Coordinate[np.int16] = ensemble_member(ge=1, le=50)
     longitude: Coordinate[np.float64] = longitude(ge=-180, le=180)

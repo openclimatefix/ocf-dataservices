@@ -2,6 +2,7 @@ import datetime as dt
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from typing import ClassVar
 from unittest.mock import patch
 
@@ -10,14 +11,20 @@ import xarray as xr
 from pandera.typing.xarray import Coordinate
 from schemas import (
     NwpDatasetSchema,
-    init_time,
+    init_time_coord,
+    is_valid_grib_file,
     latitude,
     longitude,
     step,
     temperature_2m,
 )
 from storage.cli import ProductSpec, build_parser, run_cli
-from storage.store import existing_partition, has_partition, open_icechunk_repo, write_to_icechunk
+from storage.store import (
+    existing_partition,
+    has_partition,
+    open_icechunk_repo,
+    write_to_icechunk,
+)
 
 
 class _TestSchema(NwpDatasetSchema):
@@ -35,7 +42,7 @@ class _TestSchema(NwpDatasetSchema):
         "longitude": -1,
     }
 
-    init_time: Coordinate[np.datetime64] = init_time()
+    init_time: Coordinate[np.datetime64] = init_time_coord()
     step: Coordinate[np.timedelta64] = step(ge_hours=0, le_hours=6)
     latitude: Coordinate[np.float64] = latitude()
     longitude: Coordinate[np.float64] = longitude()
@@ -124,6 +131,31 @@ class TestStorageAndCli(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             existing_partition("/tmp/nonexistent", "init_time", "not-a-timestamp")
+
+    def test_is_valid_grib_file_rejects_html_and_small_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            self.assertFalse(is_valid_grib_file(tmp_path / "missing.grib"))
+
+            # HTML login page (even if large) is rejected because magic bytes != b"GRIB"
+            html_file = tmp_path / "login.grib"
+            html_file.write_bytes(b"<!DOCTYPE html><html>Login</html>" + b" " * 150_000)
+            self.assertFalse(is_valid_grib_file(html_file))
+
+            # Truncated GRIB smaller than 100 KB is rejected
+            tiny_grib = tmp_path / "tiny.grib"
+            tiny_grib.write_bytes(b"GRIB" + b"\x00" * 1024)
+            self.assertFalse(is_valid_grib_file(tiny_grib))
+
+            # GRIB header without 7777 end marker (truncated / trailing HTML) is rejected
+            unterminated_grib = tmp_path / "unterminated.grib"
+            unterminated_grib.write_bytes(b"GRIB" + b"\x00" * 100_000 + b"</html>")
+            self.assertFalse(is_valid_grib_file(unterminated_grib))
+
+            # Valid GRIB header, >= 100 KB, and 7777 end marker passes
+            valid_grib = tmp_path / "valid.grib"
+            valid_grib.write_bytes(b"GRIB" + b"\x00" * 100_000 + b"7777")
+            self.assertTrue(is_valid_grib_file(valid_grib))
 
     def test_empty_step_hours_env_defaults_to_6(self) -> None:
         products = {"demo": ProductSpec(schema=_TestSchema, fetch=_make_ds)}

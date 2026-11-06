@@ -6,7 +6,6 @@ from schemas.base import NwpDatasetSchema
 from schemas.nwp_coordinates import (
     grid_first_lat,
     grid_first_lon,
-    init_time,
     init_time_coord,
     latitude,
     longitude,
@@ -44,7 +43,7 @@ class MetOfficeGlobalWesteuropeSchema(NwpDatasetSchema):
     _dims = ("init_time", "step", "latitude", "longitude")
 
     # Dimensions
-    init_time: Coordinate[np.datetime64] = init_time()
+    init_time: Coordinate[np.datetime64] = init_time_coord()
     step: Coordinate[np.timedelta64] = step(ge_hours=0, le_hours=54)
     longitude: Coordinate[np.float64] = longitude(ge=-180, le=180)
     latitude: Coordinate[np.float64] = latitude(ge=-90, le=90)
@@ -90,7 +89,7 @@ class MetOfficeGlobalIndiaSchema(NwpDatasetSchema):
     _dims = ("init_time", "step", "latitude", "longitude")
 
     # Dimensions
-    init_time: Coordinate[np.datetime64] = init_time()
+    init_time: Coordinate[np.datetime64] = init_time_coord()
     step: Coordinate[np.timedelta64] = step(ge_hours=0, le_hours=54)
     longitude: Coordinate[np.float64] = longitude(ge=-180, le=180)
     latitude: Coordinate[np.float64] = latitude(ge=-90, le=90)
@@ -129,7 +128,7 @@ class MetOfficeUkvSchema(NwpDatasetSchema):
 
     # Dimensions. The UKV model is kept on its native Lambert Azimuthal Equal Area grid
     # (metres), not remapped to lat/lon.
-    init_time: Coordinate[np.datetime64] = init_time()
+    init_time: Coordinate[np.datetime64] = init_time_coord()
     step: Coordinate[np.timedelta64] = step(ge_hours=0, le_hours=42)
     y_laea: Coordinate[np.float64] = y_laea(ge=-576000, le=700000)
     x_laea: Coordinate[np.float64] = x_laea(ge=-576000, le=332000)

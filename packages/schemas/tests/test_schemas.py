@@ -10,7 +10,7 @@ from schemas import (
     downward_short_wave_radiation_flux_surface,
     ensemble_member,
     high_cloud_cover,
-    init_time,
+    init_time_coord,
     latitude,
     longitude,
     pressure_reduced_to_mean_sea_level,
@@ -41,7 +41,7 @@ class _SampleSchema(NwpDatasetSchema):
         "longitude": -1,
     }
 
-    init_time: Coordinate[np.datetime64] = init_time()
+    init_time: Coordinate[np.datetime64] = init_time_coord()
     step: Coordinate[np.timedelta64] = step(ge_hours=0, le_hours=85)
     ensemble_member: Coordinate[np.int16] = ensemble_member(ge=1, le=50)
     latitude: Coordinate[np.float64] = latitude()

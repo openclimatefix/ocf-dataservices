@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 
 import s3fs
+from schemas.validation import is_valid_grib_file
 
 
 def get_completed_init_times(
@@ -76,6 +77,9 @@ def download_live_ecmwf_partition(
     prefix: str,
 ) -> int:
     """Download raw ECMWF live data files into a single local file."""
+    if is_valid_grib_file(out_path):
+        return 1
+
     fs = s3fs.S3FileSystem(
         key=access_key,
         secret=secret,
@@ -94,5 +98,9 @@ def download_live_ecmwf_partition(
         for f in files:
             with fs.open(f, "rb") as in_f:
                 out_f.write(in_f.read())
+
+    if not is_valid_grib_file(out_path):
+        out_path.unlink(missing_ok=True)
+        raise RuntimeError(f"Downloaded file {out_path} is not a valid GRIB file.")
 
     return len(files)

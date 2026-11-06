@@ -36,19 +36,19 @@ def l0_mars_ecmwf_ens_uk_v1(
     Returns the path to the downloaded GRIB file.
     """
     partition_key = context.partition_key
+    existing_path = context.resources.l0_io_manager.existing_partition(
+        context.asset_key, partition_key
+    )
+    if existing_path is not None:
+        context.log.info(
+            f"Valid L0 GRIB for partition {partition_key} already exists at {existing_path}. Skipping download."
+        )
+        return dg.Output(existing_path, metadata={"status": "skipped"})
+
     nwp_init_time = context.partition_time_window.start
     metadata = context.assets_def.get_asset_spec().metadata
 
     client = mars_client.get_client()
-
-    # Use mkstemp to hold the GRIB data.
-    # The l0_io_manager will move this file to final storage when we return it.
-    fd, temp_path = tempfile.mkstemp(
-        suffix=".grib", prefix=f"mars_ens_{partition_key.replace(':', '')}_"
-    )
-    os.close(fd)
-
-    target_path = Path(temp_path)
 
     start_time = time.perf_counter()
 
@@ -123,9 +123,18 @@ def l0_mars_ecmwf_ens_uk_v1(
 
     expected_size = result_obj.get("size", 0)
 
+    fd, temp_path = tempfile.mkstemp(
+        suffix=".grib", prefix=f"mars_ens_{partition_key.replace(':', '')}_"
+    )
+    os.close(fd)
+    target_path = Path(temp_path)
+
     try:
         with open(target_path, "wb") as f:
             client.download_result(result_href, f, expected_size)
+    except Exception:
+        target_path.unlink(missing_ok=True)
+        raise
     finally:
         client.cleanup(poll_url)
         url_file_path.unlink(missing_ok=True)
