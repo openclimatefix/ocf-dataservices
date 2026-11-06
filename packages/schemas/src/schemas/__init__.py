@@ -12,7 +12,9 @@ from .nwp_coordinates import (
     step,
     utc_now_coord,
     x_laea,
+    x_osgb,
     y_laea,
+    y_osgb,
 )
 from .nwp_variables import (
     categorical_precipitation_type_surface,
@@ -77,5 +79,7 @@ __all__ = [
     "wind_v_100m",
     "wind_v_200m",
     "x_laea",
+    "x_osgb",
     "y_laea",
+    "y_osgb",
 ]

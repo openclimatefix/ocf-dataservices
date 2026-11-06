@@ -27,6 +27,7 @@ dependencies = [
     "storage",
     "ecmwflive-data",
     "metoffice-data",
+    "ceda-data",
     "pandera>=0.32.1",
     "xarray>=2026.7.0",
 ]
@@ -60,6 +61,7 @@ schemas = { workspace = true }
 storage = { workspace = true }
 ecmwflive-data = { workspace = true }
 metoffice-data = { workspace = true }
+ceda-data = { workspace = true }
 
 
 [tool.hatch.build.targets.wheel]

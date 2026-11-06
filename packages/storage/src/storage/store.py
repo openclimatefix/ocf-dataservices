@@ -12,7 +12,7 @@ import xarray as xr
 import zarr.codecs
 from schemas.base import NwpDatasetSchema
 
-SPATIAL_DIMS = ("latitude", "longitude", "y_laea", "x_laea")
+SPATIAL_DIMS = ("latitude", "longitude", "y_laea", "x_laea", "y_osgb", "x_osgb")
 STATS = ("count", "mean", "std", "min", "max")
 
 
