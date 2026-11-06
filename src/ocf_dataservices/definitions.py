@@ -21,9 +21,6 @@ from ocf_dataservices.resources.mars import (
     DagsterMarsClient,
 )
 
-# Using dg.EnvVar is Dagster best practice. It defers the resolution of the
-# environment variable until execution time, and allows the Dagster UI to
-# explicitly display and validate the required configuration.
 local_resources = {
     "l0_io_manager": RawFileIOManager(
         base_path=dg.EnvVar("L0_ROOT_PATH"),
