@@ -3,7 +3,7 @@ from typing import ClassVar
 import numpy as np
 from pandera.typing.xarray import Coordinate
 from schemas.base import NwpDatasetSchema
-from schemas.nwp_coordinates import init_time, latitude, longitude, step
+from schemas.nwp_coordinates import init_time, init_time_coord, latitude, longitude, step
 from schemas.nwp_variables import (
     direct_solar_radiation,
     downward_long_wave_radiation_flux_surface,
@@ -42,6 +42,12 @@ class EcmwfLiveSchema(NwpDatasetSchema):
     step: Coordinate[np.timedelta64] = step(ge_hours=0, le_hours=84)
     longitude: Coordinate[np.float64] = longitude(ge=-180, le=180)
     latitude: Coordinate[np.float64] = latitude(ge=-90, le=90)
+
+    # Auxiliary metadata coordinates on init_time
+    generating_process_id: Coordinate[np.int16] = init_time_coord()
+    expver: Coordinate[np.int16] = init_time_coord()
+    grib_tables_version: Coordinate[np.int16] = init_time_coord()
+    ingested_at: Coordinate[np.datetime64] = init_time_coord()
 
     # Variables (18 parameters)
     wind_u_10m: np.float32 = wind_u_10m(dims=_dims, nullable=True)

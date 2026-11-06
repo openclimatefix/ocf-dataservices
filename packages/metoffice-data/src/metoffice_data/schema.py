@@ -4,7 +4,10 @@ import numpy as np
 from pandera.typing.xarray import Coordinate
 from schemas.base import NwpDatasetSchema
 from schemas.nwp_coordinates import (
+    grid_first_lat,
+    grid_first_lon,
     init_time,
+    init_time_coord,
     latitude,
     longitude,
     step,
@@ -45,6 +48,11 @@ class MetOfficeGlobalWesteuropeSchema(NwpDatasetSchema):
     step: Coordinate[np.timedelta64] = step(ge_hours=0, le_hours=54)
     longitude: Coordinate[np.float64] = longitude(ge=-180, le=180)
     latitude: Coordinate[np.float64] = latitude(ge=-90, le=90)
+
+    # Auxiliary metadata coordinates on init_time
+    generating_process_id: Coordinate[np.int16] = init_time_coord()
+    local_tables_version: Coordinate[np.int16] = init_time_coord()
+    ingested_at: Coordinate[np.datetime64] = init_time_coord()
 
     # Variables (12 parameters)
     total_cloud_cover_atmosphere: np.float32 = total_cloud_cover_atmosphere(
@@ -87,6 +95,11 @@ class MetOfficeGlobalIndiaSchema(NwpDatasetSchema):
     longitude: Coordinate[np.float64] = longitude(ge=-180, le=180)
     latitude: Coordinate[np.float64] = latitude(ge=-90, le=90)
 
+    # Auxiliary metadata coordinates on init_time
+    generating_process_id: Coordinate[np.int16] = init_time_coord()
+    local_tables_version: Coordinate[np.int16] = init_time_coord()
+    ingested_at: Coordinate[np.datetime64] = init_time_coord()
+
     # Variables (11 parameters)
     total_cloud_cover_atmosphere: np.float32 = total_cloud_cover_atmosphere(
         dims=_dims, nullable=False
@@ -120,6 +133,13 @@ class MetOfficeUkvSchema(NwpDatasetSchema):
     step: Coordinate[np.timedelta64] = step(ge_hours=0, le_hours=42)
     y_laea: Coordinate[np.float64] = y_laea(ge=-576000, le=700000)
     x_laea: Coordinate[np.float64] = x_laea(ge=-576000, le=332000)
+
+    # Auxiliary metadata coordinates on init_time
+    generating_process_id: Coordinate[np.int16] = init_time_coord()
+    local_tables_version: Coordinate[np.int16] = init_time_coord()
+    grid_first_lat: Coordinate[np.float64] = grid_first_lat()
+    grid_first_lon: Coordinate[np.float64] = grid_first_lon()
+    ingested_at: Coordinate[np.datetime64] = init_time_coord()
 
     # Variables (12 parameters)
     high_cloud_cover: np.float32 = high_cloud_cover(dims=_dims, nullable=False)

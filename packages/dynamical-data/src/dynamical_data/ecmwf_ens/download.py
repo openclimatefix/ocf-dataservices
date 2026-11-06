@@ -1,11 +1,12 @@
 import concurrent.futures
 import datetime as dt
-from typing import Final, Literal
+from typing import Literal
 
 import dynamical_catalog
 import numpy as np
 import xarray as xr
 from schemas.dim_order import enforce_dim_order
+from schemas.nwp_coordinates import utc_now_coord
 from schemas.validation import validates
 
 from .schema import DynamicalEcmwfEnsSchema
@@ -13,21 +14,6 @@ from .schema import DynamicalEcmwfEnsSchema
 
 class NwpRunNotYetAvailable(Exception):
     """Raised when ``nwp_init_time`` isn't in the catalog yet (Dynamical hasn't published it)."""
-
-
-_ECMWF_ENS_VARS_TO_DOWNLOAD: Final[tuple[str, ...]] = (
-    "temperature_2m",
-    "wind_u_10m",
-    "wind_v_10m",
-    "wind_u_100m",
-    "wind_v_100m",
-    "total_cloud_cover_atmosphere",
-    "pressure_reduced_to_mean_sea_level",
-    "downward_long_wave_radiation_flux_surface",
-    "downward_short_wave_radiation_flux_surface",
-    "precipitation_surface",
-    "categorical_precipitation_type_surface",
-)
 
 
 def open_it(
@@ -57,7 +43,20 @@ def open_it(
 
     # Cast to xr.Dataset to satisfy the type checker, as indexing with a list is misidentified as
     # returning a DataArray.
-    ds = ds[list(_ECMWF_ENS_VARS_TO_DOWNLOAD)]
+    vars_to_download = [
+        "temperature_2m",
+        "wind_u_10m",
+        "wind_v_10m",
+        "wind_u_100m",
+        "wind_v_100m",
+        "total_cloud_cover_atmosphere",
+        "pressure_reduced_to_mean_sea_level",
+        "downward_long_wave_radiation_flux_surface",
+        "downward_short_wave_radiation_flux_surface",
+        "precipitation_surface",
+        "categorical_precipitation_type_surface",
+    ]
+    ds = ds[vars_to_download]
 
     if utc_nwp_init_time not in ds.init_time.values:
         raise NwpRunNotYetAvailable(f"{utc_nwp_init_time} is not in ds.init_time.values")
@@ -150,6 +149,17 @@ def _to_dataset(data_arrays: dict[str, xr.DataArray], ds_sliced: xr.Dataset) -> 
     )
     if "ensemble_member" in ds.coords:
         ds["ensemble_member"] = ds["ensemble_member"].astype(np.int16)
+
+    n_init = ds.sizes["init_time"]
+    version_str = str(
+        ds_sliced.attrs.get("dataset_version")
+        or ds_sliced.attrs.get("version")
+        or "unknown"
+    )
+    ds = ds.assign_coords(
+        catalog_version=("init_time", np.full(n_init, version_str, dtype="<U64")),
+        ingested_at=utc_now_coord(n_init),
+    )
 
     # Dynamical stores de-accumulated rates as backward averages over [T-dt, T] (leaving step=0 as
     # NaN). Shift them by -1 along `step` and drop the final step so step T holds the forward rate

@@ -38,6 +38,10 @@ class TestProcessing(unittest.TestCase):
             # 96h should be dropped
             self.assertNotIn(np.timedelta64(96, "h"), out_ds.step.values)
             self.assertIn(np.timedelta64(84, "h"), out_ds.step.values)
+            self.assertIn("generating_process_id", out_ds.coords)
+            self.assertIn("expver", out_ds.coords)
+            self.assertIn("grib_tables_version", out_ds.coords)
+            self.assertIn("ingested_at", out_ds.coords)
 
     def test_radiation_diff_and_cloud_overshoot_conversion(self):
         """Test radiation de-accumulation keeps step 84h and cloud overshoot 1.0001 scales to 100%."""
@@ -58,6 +62,12 @@ class TestProcessing(unittest.TestCase):
             },
         )
 
+        ds["hcc"].attrs = {
+            "GRIB_generatingProcessIdentifier": 155,
+            "GRIB_expver": "h9be",
+            "GRIB_tablesVersion": 32,
+        }
+
         with patch("cfgrib.open_datasets", return_value=[ds]):
             out_ds = process_ecmwf_live(
                 grib_path="dummy.grib", bbox_nwse=[53, 3, 50, 6], max_step_hours=84
@@ -69,6 +79,9 @@ class TestProcessing(unittest.TestCase):
         np.testing.assert_allclose(
             out_ds["downward_short_wave_radiation_flux_surface"].values, 1.0, atol=1e-4
         )
+        self.assertEqual(list(out_ds.coords["generating_process_id"].values), [155])
+        self.assertEqual(list(out_ds.coords["expver"].values), [-1])
+        self.assertEqual(list(out_ds.coords["grib_tables_version"].values), [32])
 
     def test_cli_fetch_rejects_incomplete_s3_run(self):
         """Test that standalone CLI refuses to download when S3 dissemination is incomplete."""

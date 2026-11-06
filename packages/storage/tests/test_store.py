@@ -197,6 +197,34 @@ class TestStorageAndCli(unittest.TestCase):
             np.testing.assert_allclose(stats_da.sel(stat="min").values, [10.0, 2.0], rtol=1e-6)
             np.testing.assert_allclose(stats_da.sel(stat="max").values, [40.0, 10.0], rtol=1e-6)
 
+            # Out-of-order earlier month (March 2026) keeps `month` coordinate sorted
+            ds_march = xr.Dataset(
+                data_vars={
+                    "temperature_2m": (
+                        dims,
+                        np.array([[[[5.0, 5.0]], [[5.0, 5.0]]]], dtype=np.float32),
+                    )
+                },
+                coords={"init_time": np.array(["2026-03-10T00:00"], dtype="datetime64[ns]")}
+                | coords_common,
+            )
+            write_to_icechunk(
+                ds_march, _TestSchema, store_path, keep_mantissa_bits=None, write_stats=True
+            )
+            session2 = repo.readonly_session(branch="main")
+            stats_all = xr.open_zarr(session2.store, group="stats", consolidated=False)
+            np.testing.assert_array_equal(
+                stats_all.coords["month"].values,
+                np.array(["2026-03-01", "2026-04-01"], dtype="datetime64[ns]"),
+            )
+            np.testing.assert_allclose(
+                stats_all["temperature_2m"]
+                .sel(month="2026-03-01", stat="mean", latitude=50.0)
+                .values,
+                [5.0, 5.0],
+                rtol=1e-6,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

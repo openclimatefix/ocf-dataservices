@@ -62,6 +62,7 @@ def _mock_catalog_dataset() -> xr.Dataset:
             "longitude": np.array([-5.0, 0.0], dtype=np.float64),
             "expected_forecast_length": np.timedelta64(360, "h"),
         },
+        attrs={"dataset_version": "0.1.0"},
     )
 
 
@@ -86,6 +87,8 @@ class TestDynamicalDownload(unittest.TestCase):
         )
         self.assertFalse(bool(ds["downward_short_wave_radiation_flux_surface"].isnull().any()))
         self.assertFalse(bool(ds["total_precipitation_rate"].isnull().any()))
+        self.assertEqual(list(ds.coords["catalog_version"].values), ["0.1.0"])
+        self.assertIn("ingested_at", ds.coords)
 
 
 if __name__ == "__main__":

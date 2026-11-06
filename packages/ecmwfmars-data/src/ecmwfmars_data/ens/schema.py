@@ -3,7 +3,14 @@ from typing import ClassVar
 import numpy as np
 from pandera.typing.xarray import Coordinate
 from schemas.base import NwpDatasetSchema
-from schemas.nwp_coordinates import ensemble_member, init_time, latitude, longitude, step
+from schemas.nwp_coordinates import (
+    ensemble_member,
+    init_time,
+    init_time_coord,
+    latitude,
+    longitude,
+    step,
+)
 from schemas.nwp_variables import (
     downward_short_wave_radiation_flux_surface,
     high_cloud_cover,
@@ -37,6 +44,12 @@ class MarsEcmwfEnsSchema(NwpDatasetSchema):
     ensemble_member: Coordinate[np.int16] = ensemble_member(ge=1, le=50)
     longitude: Coordinate[np.float64] = longitude(ge=-180, le=180)
     latitude: Coordinate[np.float64] = latitude(ge=-90, le=90)
+
+    # Auxiliary metadata coordinates on init_time
+    generating_process_id: Coordinate[np.int16] = init_time_coord()
+    expver: Coordinate[np.int16] = init_time_coord()
+    grib_tables_version: Coordinate[np.int16] = init_time_coord()
+    ingested_at: Coordinate[np.datetime64] = init_time_coord()
 
     # Variables
     temperature_2m: np.float32 = temperature_2m(dims=_dims, nullable=False)
