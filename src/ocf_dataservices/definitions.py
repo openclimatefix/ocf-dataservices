@@ -1,8 +1,15 @@
 import dagster as dg
 
 from ocf_dataservices.defs.assets import (
+    l0_ceda_global_west_europe_v1,
+    l0_ceda_ukv_uk_v1,
     l0_mars_ecmwf_ens_uk_v1,
+    l1_ceda_global_west_europe_v1,
+    l1_ceda_ukv_uk_v1,
     l1_mars_ecmwf_ens_uk_v1,
+)
+from ocf_dataservices.resources.ceda import (
+    DagsterCedaClient,
 )
 from ocf_dataservices.resources.iomanager_raw_file import (
     RawFileIOManager,
@@ -32,12 +39,20 @@ local_resources = {
         key=dg.EnvVar("ECMWF_API_KEY"),
         email=dg.EnvVar("ECMWF_API_EMAIL"),
     ),
+    "ceda_client": DagsterCedaClient(
+        username=dg.EnvVar("CEDA_USER"),
+        password=dg.EnvVar("CEDA_PASS"),
+    ),
 }
 
 defs = dg.Definitions(
     assets=[
         l0_mars_ecmwf_ens_uk_v1,
         l1_mars_ecmwf_ens_uk_v1,
+        l0_ceda_ukv_uk_v1,
+        l1_ceda_ukv_uk_v1,
+        l0_ceda_global_west_europe_v1,
+        l1_ceda_global_west_europe_v1,
     ],
     resources=local_resources,
 )

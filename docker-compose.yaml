@@ -156,8 +156,14 @@ configs:
           tag_concurrency_limits:
             - key: "dagster/backfill"
               limit: 25
-            - key: "nwp-consumer"
-              limit: 5
+
+      concurrency:
+        pools:
+          default_limit: 1
+
+      run_monitoring:
+        enabled: true
+        free_slots_after_run_end_seconds: 300
 
       # Loads /opt/dagster/home/.env and injects it into os.environ before each run executes,
       # including inside containers launched by the run_launcher below (dagster_docker's

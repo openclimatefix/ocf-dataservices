@@ -18,8 +18,6 @@ def _download_many_to_file(
     """Download `relative_paths` in parallel and stream them in order into `out_path`."""
     if is_valid_grib_file(out_path):
         return 1
-    if not relative_paths:
-        return 0
 
     count = 0
     try:
@@ -66,7 +64,7 @@ def download_global_partition(
     init_time: dt.datetime,
     out_path: Path,
     areas: Sequence[str] = ("AreaA",),
-    max_workers: int = 10,
+    max_workers: int = 4,
 ) -> int:
     """Download the CEDA Global 17km GRIB files for `init_time` into `out_path`.
 

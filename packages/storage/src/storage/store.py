@@ -1,6 +1,8 @@
 import datetime as dt
 import fcntl
+import random
 import re
+import time
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -372,103 +374,115 @@ def write_to_icechunk(
             aws_region_name=aws_region_name,
             aws_endpoint_url=aws_endpoint_url,
         )
-        session = repo.writable_session(branch="main")
-
-        dataset_exists = False
-        existing_ds = None
-        try:
-            existing_ds = xr.open_zarr(session.store, consolidated=False)
-            dataset_exists = True
-        except Exception:  # noqa: BLE001
-            dataset_exists = False
-
-        ds_to_write = ds
-        skip_write = False
-
-        if deduplicate and dataset_exists and existing_ds is not None:
-            existing_times = existing_ds[append_dim].values.astype("datetime64[ns]")
-            incoming_times = ds[append_dim].values.astype("datetime64[ns]")
-            is_new = ~np.isin(incoming_times, existing_times)
-
-            if not is_new.any():
-                skip_write = True
-            else:
-                ds_to_write = ds.isel({append_dim: is_new}).sortby(append_dim)
-
+        max_commit_retries = 5
+        cached_key: tuple[int, bool] | None = None
         stats: xr.Dataset | None = None
-        if write_stats:
-            stats = _compute_monthly_stats(ds_to_write, append_dim)
+        obj_to_write: xr.Dataset = ds
+        for attempt in range(max_commit_retries):
+            session = repo.writable_session(branch="main")
 
-        obj_to_write = ds_to_write if skip_write else _round_bits(ds_to_write)
+            dataset_exists = False
+            existing_ds = None
+            try:
+                existing_ds = xr.open_zarr(session.store, consolidated=False)
+                dataset_exists = True
+            except Exception:  # noqa: BLE001
+                dataset_exists = False
 
-        if not skip_write:
+            ds_to_write = ds
+            skip_write = False
+
             if deduplicate and dataset_exists and existing_ds is not None:
-                obj_to_write.to_zarr(
-                    session.store,
-                    mode="a",
-                    append_dim=append_dim,
-                    write_empty_chunks=False,
-                )
-            else:
-                obj_to_write.to_zarr(
-                    session.store,
-                    zarr_format=3,
-                    mode="w-",
-                    write_empty_chunks=False,
-                    encoding={
-                        var: {
-                            "dtype": "float32",
-                            "chunks": tuple(
-                                obj_to_write.coords[k].size if v == -1 else v
-                                for k, v in schema._chunks.items()
-                            ),
-                            "shards": tuple(
-                                obj_to_write.coords[k].size if v == -1 else v
-                                for k, v in schema._shards.items()
-                            ),
-                            "compressors": zarr.codecs.BloscCodec(
-                                cname="zstd",
-                                clevel=3,
-                                shuffle="bitshuffle",
-                            ),
+                existing_times = existing_ds[append_dim].values.astype("datetime64[ns]")
+                incoming_times = ds[append_dim].values.astype("datetime64[ns]")
+                is_new = ~np.isin(incoming_times, existing_times)
+
+                if not is_new.any():
+                    skip_write = True
+                else:
+                    ds_to_write = ds.isel({append_dim: is_new}).sortby(append_dim)
+
+            current_key = (int(ds_to_write.sizes[append_dim]), skip_write)
+            if cached_key != current_key:
+                stats = _compute_monthly_stats(ds_to_write, append_dim) if write_stats else None
+                obj_to_write = ds_to_write if skip_write else _round_bits(ds_to_write)
+                cached_key = current_key
+
+            if not skip_write:
+                if deduplicate and dataset_exists and existing_ds is not None:
+                    obj_to_write.to_zarr(
+                        session.store,
+                        mode="a",
+                        append_dim=append_dim,
+                        write_empty_chunks=False,
+                    )
+                else:
+                    obj_to_write.to_zarr(
+                        session.store,
+                        zarr_format=3,
+                        mode="w-",
+                        write_empty_chunks=False,
+                        encoding={
+                            var: {
+                                "dtype": "float32",
+                                "chunks": tuple(
+                                    obj_to_write.coords[k].size if v == -1 else v
+                                    for k, v in schema._chunks.items()
+                                ),
+                                "shards": tuple(
+                                    obj_to_write.coords[k].size if v == -1 else v
+                                    for k, v in schema._shards.items()
+                                ),
+                                "compressors": zarr.codecs.BloscCodec(
+                                    cname="zstd",
+                                    clevel=3,
+                                    shuffle="bitshuffle",
+                                ),
+                            }
+                            for var in obj_to_write.data_vars
                         }
-                        for var in obj_to_write.data_vars
-                    }
-                    | {
-                        coord: (
-                            {
+                        | {
+                            coord: (
+                                {
+                                    "dtype": int,
+                                    "units": "nanoseconds since 1970-01-01",
+                                    "calendar": "proleptic_gregorian",
+                                    "chunks": 10000,
+                                }
+                                if np.issubdtype(obj_to_write.coords[coord].dtype, np.datetime64)
+                                else (
+                                    {"dtype": "<U64", "chunks": 10000}
+                                    if np.issubdtype(obj_to_write.coords[coord].dtype, np.str_)
+                                    else {"chunks": 10000}
+                                )
+                            )
+                            for coord in obj_to_write.coords
+                            if coord not in obj_to_write.dims
+                        }
+                        | {
+                            append_dim: {
                                 "dtype": int,
                                 "units": "nanoseconds since 1970-01-01",
                                 "calendar": "proleptic_gregorian",
                                 "chunks": 10000,
                             }
-                            if np.issubdtype(obj_to_write.coords[coord].dtype, np.datetime64)
-                            else (
-                                {"dtype": "<U64", "chunks": 10000}
-                                if np.issubdtype(obj_to_write.coords[coord].dtype, np.str_)
-                                else {"chunks": 10000}
-                            )
-                        )
-                        for coord in obj_to_write.coords
-                        if coord not in obj_to_write.dims
-                    }
-                    | {
-                        append_dim: {
-                            "dtype": int,
-                            "units": "nanoseconds since 1970-01-01",
-                            "calendar": "proleptic_gregorian",
-                            "chunks": 10000,
-                        }
-                    },
-                )
+                        },
+                    )
 
-        wrote_stats = _write_stats_group(session.store, stats, skip_write)
+            wrote_stats = _write_stats_group(session.store, stats, skip_write)
 
-        if not skip_write or wrote_stats:
-            msg = commit_message or f"icechunk write at {dt.datetime.now(dt.UTC)}"
-            commit_hash = str(session.commit(msg))
-        else:
-            commit_hash = "N/A (Skipped duplicates)"
+            if not skip_write or wrote_stats:
+                msg = commit_message or f"icechunk write at {dt.datetime.now(dt.UTC)}"
+                try:
+                    commit_hash = str(session.commit(msg))
+                    break
+                except (icechunk.ConflictError, icechunk.RebaseFailedError):
+                    if attempt == max_commit_retries - 1:
+                        raise
+                    time.sleep(random.uniform(0.5, 1.5) * (attempt + 1))
+            else:
+                commit_hash = "N/A (Skipped duplicates)"
+                break
 
     size_bytes = obj_to_write.nbytes if not skip_write else 0
     written_dims = (

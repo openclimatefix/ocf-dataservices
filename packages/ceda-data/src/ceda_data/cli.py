@@ -30,11 +30,7 @@ def _make_fetcher(
         client = _get_client()
         with tempfile.TemporaryDirectory() as tmp_dir:
             grib_path = Path(tmp_dir) / f"ceda_{name}_{init_time:%Y%m%d%H%M}.grib"
-            num_files = download_fn(client, init_time, grib_path)
-            if num_files == 0:
-                raise RuntimeError(
-                    f"No CEDA files available for '{name}' at {init_time.isoformat()}."
-                )
+            download_fn(client, init_time, grib_path)
             return process_fn(grib_path)
 
     return _fetch
