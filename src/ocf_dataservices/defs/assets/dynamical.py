@@ -1,5 +1,4 @@
 import time
-from typing import Final
 
 import dagster as dg
 import xarray as xr
@@ -15,14 +14,6 @@ ecmwf_ens_partitions = dg.TimeWindowPartitionsDefinition(
     end_offset=2,  # Delay keys by 2 intervals (~12 hours) to match availability lag
 )
 """One partition per 6-hourly ECMWF ENS run (00Z, 06Z, 12Z, 18Z). ``end_offset=2`` allows data time to land."""
-
-_ECMWF_ENS_MAX_RETRIES: Final[int] = 8
-"""Retries × ``_ECMWF_ENS_RETRY_DELAY_SECONDS`` ≈ 4h of coverage past the 08:30 UTC schedule
-(``ecmwf_ens_schedule``), comfortably past Dynamical's typical publication time. Only applies to
-``NwpRunNotYetAvailable``; a genuine bug fails immediately instead of retrying for hours."""
-
-_ECMWF_ENS_RETRY_DELAY_SECONDS: Final[int] = 1800
-"""How long to wait between retries of a not-yet-published ECMWF run."""
 
 
 @dg.asset(
@@ -61,9 +52,9 @@ def l1_dynamical_ecmwf_ens_uk_v1(context: dg.AssetExecutionContext) -> dg.Output
     try:
         ds_lazy = open_it(nwp_init_time=nwp_init_time, bbox_nwse=tuple(metadata["bbox_nwse"]))
     except NwpRunNotYetAvailable as exc:
-        raise dg.RetryRequested(
-            max_retries=_ECMWF_ENS_MAX_RETRIES, seconds_to_wait=_ECMWF_ENS_RETRY_DELAY_SECONDS
-        ) from exc
+        # 8 retries * 1800s ≈ 4h of coverage past the 08:30 UTC schedule, comfortably past
+        # Dynamical's typical publication time.
+        raise dg.RetryRequested(max_retries=8, seconds_to_wait=1800) from exc
     context.log.info("Lazily opened Icechunk store.")
 
     ds: xr.Dataset = download(ds_lazy)

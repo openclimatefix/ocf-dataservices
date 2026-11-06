@@ -97,6 +97,11 @@ class TestDownload(unittest.TestCase):
                         ),
                     },
                     coords=coords,
+                    attrs={
+                        "GRIB_generatingProcessIdentifier": 154,
+                        "GRIB_expver": "0001",
+                        "GRIB_tablesVersion": 31,
+                    },
                 )
             elif step_type == "accum":
                 # accumulated variables
@@ -141,9 +146,13 @@ class TestDownload(unittest.TestCase):
                 with self.subTest(var=var_name):
                     np.testing.assert_allclose(ds[var_name].values, expected_value, atol=1e-5)
 
-            # Check coords renaming
+            # Check coords renaming and metadata coordinates
             self.assertIn("init_time", ds.coords)
             self.assertIn("ensemble_member", ds.coords)
+            self.assertEqual(list(ds.coords["generating_process_id"].values), [154])
+            self.assertEqual(list(ds.coords["expver"].values), [1])
+            self.assertEqual(list(ds.coords["grib_tables_version"].values), [31])
+            self.assertIn("ingested_at", ds.coords)
 
 
 if __name__ == "__main__":

@@ -5,60 +5,13 @@ import cfgrib
 import numpy as np
 import xarray as xr
 from schemas.dim_order import enforce_dim_order
+from schemas.nwp_coordinates import extract_grib_attr, utc_now_coord
 from schemas.validation import validates
 
 from .schema import (
     MetOfficeGlobalIndiaSchema,
     MetOfficeGlobalWesteuropeSchema,
     MetOfficeUkvSchema,
-)
-
-# Surface-adjusted wind parameters arrive as 'unknown' and must be disambiguated by the GRIB2
-# parameterNumber. See https://datahub.metoffice.gov.uk/docs/glossary?sortOrder=GRIB2_CODE.
-_PARAMETER_NUMBER_NAMES: dict[int, str] = {
-    1: "tcc",
-    192: "u10",
-    193: "v10",
-    194: "wdir",
-    195: "si10",
-}
-
-_VAR_MAPPING: dict[str, str] = {
-    "tcc": "total_cloud_cover_atmosphere",
-    "hcc": "high_cloud_cover",
-    "mcc": "medium_cloud_cover",
-    "lcc": "low_cloud_cover",
-    "vis": "visibility",
-    "r": "relative_humidity_2m",
-    "r2": "relative_humidity_2m",
-    "prmsl": "pressure_reduced_to_mean_sea_level",
-    "msl": "pressure_reduced_to_mean_sea_level",
-    "sd": "snow_depth",
-    "dswrf": "downward_short_wave_radiation_flux_surface",
-    "sdswrf": "downward_short_wave_radiation_flux_surface",
-    "ssrd": "downward_short_wave_radiation_flux_surface",
-    "dlwrf": "downward_long_wave_radiation_flux_surface",
-    "sdlwrf": "downward_long_wave_radiation_flux_surface",
-    "strd": "downward_long_wave_radiation_flux_surface",
-    "t2m": "temperature_2m",
-    "t": "temperature_2m",
-    "u10": "wind_u_10m",
-    "10u": "wind_u_10m",
-    "v10": "wind_v_10m",
-    "10v": "wind_v_10m",
-    "si10": "wind_speed_10m",
-    "10si": "wind_speed_10m",
-    "wdir": "wind_direction_10m",
-    "10wdir": "wind_direction_10m",
-    "prate": "total_precipitation_rate",
-    "lsrr": "total_precipitation_rate",
-}
-
-_CLOUD_VARS = (
-    "total_cloud_cover_atmosphere",
-    "high_cloud_cover",
-    "medium_cloud_cover",
-    "low_cloud_cover",
 )
 
 # The UKV Lambert Azimuthal Equal Area grid (metres). cfgrib does not read the projected
@@ -93,16 +46,31 @@ def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:
     separately using filter_by_keys on their parameterNumber, before reading the remaining
     variables and merging everything.
     """
+    read_keys = [
+        "generatingProcessIdentifier",
+        "localTablesVersion",
+        "latitudeOfFirstGridPointInDegrees",
+        "longitudeOfFirstGridPointInDegrees",
+    ]
     cleaned: list[xr.Dataset] = []
 
-    # Handle the "unknown" variables.
-    for param_num, target_name in _PARAMETER_NUMBER_NAMES.items():
+    # Surface-adjusted wind parameters arrive as 'unknown' and must be disambiguated by the GRIB2
+    # parameterNumber. See https://datahub.metoffice.gov.uk/docs/glossary?sortOrder=GRIB2_CODE.
+    parameter_number_names: dict[int, str] = {
+        1: "tcc",
+        192: "u10",
+        193: "v10",
+        194: "wdir",
+        195: "si10",
+    }
+    for param_num, target_name in parameter_number_names.items():
         try:
             ds_param = xr.open_dataset(
                 grib_path,
                 engine="cfgrib",
                 backend_kwargs={
                     "indexpath": "",
+                    "read_keys": read_keys,
                     "filter_by_keys": {"parameterNumber": param_num},
                 },
             )
@@ -121,7 +89,7 @@ def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:
     try:
         datasets = cfgrib.open_datasets(
             grib_path,
-            backend_kwargs={"indexpath": ""},
+            backend_kwargs={"indexpath": "", "read_keys": read_keys},
         )
     except Exception as e:
         raise ValueError(f"Failed to open datasets from {grib_path}: {e}") from e
@@ -147,6 +115,11 @@ def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:
 
 def _transform(ds: xr.Dataset, dims: Sequence[str]) -> xr.Dataset:
     """Rename, convert units, and reorder dimensions to match the target schema `dims`."""
+    gen_proc = int(extract_grib_attr(ds, "generatingProcessIdentifier", -1))
+    local_tbl = int(extract_grib_attr(ds, "localTablesVersion", -1))
+    first_lat = float(extract_grib_attr(ds, "latitudeOfFirstGridPointInDegrees", np.nan))
+    first_lon = float(extract_grib_attr(ds, "longitudeOfFirstGridPointInDegrees", np.nan))
+
     # Global grids may arrive on a 0-360 longitude; the schemas use -180 to 180. The UKV grid
     # stays on its native LAEA projection, so this only applies where longitude is a dimension.
     if "longitude" in ds.dims and ds.longitude.max() > 180:
@@ -158,13 +131,48 @@ def _transform(ds: xr.Dataset, dims: Sequence[str]) -> xr.Dataset:
     if "init_time" in ds.coords and "init_time" not in ds.dims:
         ds = ds.expand_dims("init_time")
 
-    rename_vars = {k: v for k, v in _VAR_MAPPING.items() if k in ds.data_vars}
+    var_mapping: dict[str, str] = {
+        "tcc": "total_cloud_cover_atmosphere",
+        "hcc": "high_cloud_cover",
+        "mcc": "medium_cloud_cover",
+        "lcc": "low_cloud_cover",
+        "vis": "visibility",
+        "r": "relative_humidity_2m",
+        "r2": "relative_humidity_2m",
+        "prmsl": "pressure_reduced_to_mean_sea_level",
+        "msl": "pressure_reduced_to_mean_sea_level",
+        "sd": "snow_depth",
+        "dswrf": "downward_short_wave_radiation_flux_surface",
+        "sdswrf": "downward_short_wave_radiation_flux_surface",
+        "ssrd": "downward_short_wave_radiation_flux_surface",
+        "dlwrf": "downward_long_wave_radiation_flux_surface",
+        "sdlwrf": "downward_long_wave_radiation_flux_surface",
+        "strd": "downward_long_wave_radiation_flux_surface",
+        "t2m": "temperature_2m",
+        "t": "temperature_2m",
+        "u10": "wind_u_10m",
+        "10u": "wind_u_10m",
+        "v10": "wind_v_10m",
+        "10v": "wind_v_10m",
+        "si10": "wind_speed_10m",
+        "10si": "wind_speed_10m",
+        "wdir": "wind_direction_10m",
+        "10wdir": "wind_direction_10m",
+        "prate": "total_precipitation_rate",
+        "lsrr": "total_precipitation_rate",
+    }
+    rename_vars = {k: v for k, v in var_mapping.items() if k in ds.data_vars}
     ds = ds.rename(rename_vars)
 
     if "temperature_2m" in ds.data_vars:
         ds["temperature_2m"] = ds["temperature_2m"] - 273.15
 
-    for cloud_var in _CLOUD_VARS:
+    for cloud_var in (
+        "total_cloud_cover_atmosphere",
+        "high_cloud_cover",
+        "medium_cloud_cover",
+        "low_cloud_cover",
+    ):
         if cloud_var in ds.data_vars:
             if float(ds[cloud_var].max()) <= 1.1:
                 ds[cloud_var] = ds[cloud_var] * 100.0
@@ -187,7 +195,18 @@ def _transform(ds: xr.Dataset, dims: Sequence[str]) -> xr.Dataset:
     if extra_coords:
         ds = ds.drop_vars(extra_coords, errors="ignore")
 
-    schema_vars = list(set(_VAR_MAPPING.values()) - {"wind_speed_10m", "wind_direction_10m"})
+    n_init = ds.sizes["init_time"]
+    meta_coords: dict[str, object] = {
+        "generating_process_id": ("init_time", np.full(n_init, gen_proc, dtype=np.int16)),
+        "local_tables_version": ("init_time", np.full(n_init, local_tbl, dtype=np.int16)),
+        "ingested_at": utc_now_coord(n_init),
+    }
+    if "x_laea" in dims:
+        meta_coords["grid_first_lat"] = ("init_time", np.full(n_init, first_lat, dtype=np.float64))
+        meta_coords["grid_first_lon"] = ("init_time", np.full(n_init, first_lon, dtype=np.float64))
+    ds = ds.assign_coords(meta_coords)
+
+    schema_vars = list(set(var_mapping.values()) - {"wind_speed_10m", "wind_direction_10m"})
     return enforce_dim_order(ds, dims, keep_vars=schema_vars)
 
 

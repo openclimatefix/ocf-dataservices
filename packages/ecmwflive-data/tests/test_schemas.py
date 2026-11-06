@@ -42,6 +42,10 @@ class TestSchemas(unittest.TestCase):
                 "step": [np.timedelta64(0, "h"), np.timedelta64(max_step_hours, "h")],
                 "latitude": [52.0, 51.0],
                 "longitude": [4.0, 5.0],
+                "generating_process_id": ("init_time", np.array([154], dtype=np.int16)),
+                "expver": ("init_time", np.array([1], dtype=np.int16)),
+                "grib_tables_version": ("init_time", np.array([31], dtype=np.int16)),
+                "ingested_at": ("init_time", [np.datetime64("2024-01-01T01:00")]),
             },
         )
 

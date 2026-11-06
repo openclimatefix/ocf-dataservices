@@ -4,6 +4,7 @@ import cfgrib
 import numpy as np
 import xarray as xr
 from schemas.dim_order import enforce_dim_order
+from schemas.nwp_coordinates import extract_grib_attr, parse_expver_int16, utc_now_coord
 from schemas.validation import validates
 
 from .schema import EcmwfLiveSchema
@@ -20,6 +21,7 @@ def _read_raw_grib(grib_path: Path | str, bbox_nwse: list[float]) -> xr.Dataset:
             grib_path,
             backend_kwargs={
                 "indexpath": "",
+                "read_keys": ["generatingProcessIdentifier", "expver", "tablesVersion"],
                 "ignore_keys": [
                     "valid_time",
                     "stepType",
@@ -85,6 +87,10 @@ def _transform(
     max_step_hours: int,
 ) -> xr.Dataset:
     """Slice to region/step, rename, convert units, and reorder dimensions to match the schema."""
+    cycle_val = int(extract_grib_attr(ds, "generatingProcessIdentifier", -1))
+    expver_val = parse_expver_int16(extract_grib_attr(ds, "expver", -1))
+    tables_val = int(extract_grib_attr(ds, "tablesVersion", -1))
+
     # Spatial slicing
     # ECMWF S3 files typically use 0-360 longitude, but our schemas use -180 to 180.
     if "longitude" in ds.coords and ds.longitude.max() > 180:
@@ -201,6 +207,14 @@ def _transform(
     extra_coords = [c for c in ds.coords if c not in ordered_dims]
     if extra_coords:
         ds = ds.drop_vars(extra_coords, errors="ignore")
+
+    n_init = ds.sizes["init_time"]
+    ds = ds.assign_coords(
+        generating_process_id=("init_time", np.full(n_init, cycle_val, dtype=np.int16)),
+        expver=("init_time", np.full(n_init, expver_val, dtype=np.int16)),
+        grib_tables_version=("init_time", np.full(n_init, tables_val, dtype=np.int16)),
+        ingested_at=utc_now_coord(n_init),
+    )
 
     schema_vars = list(set(var_mapping.values()))
     return enforce_dim_order(ds, ordered_dims, keep_vars=schema_vars)

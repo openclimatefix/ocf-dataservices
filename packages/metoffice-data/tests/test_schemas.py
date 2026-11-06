@@ -40,6 +40,11 @@ class TestSchemas(unittest.TestCase):
                 "step": [np.timedelta64(0, "h"), np.timedelta64(max_step_hours, "h")],
                 "y_laea": [700000.0, 698000.0],
                 "x_laea": [-576000.0, -574000.0],
+                "generating_process_id": ("init_time", np.array([128], dtype=np.int16)),
+                "local_tables_version": ("init_time", np.array([1], dtype=np.int16)),
+                "grid_first_lat": ("init_time", np.array([48.5], dtype=np.float64)),
+                "grid_first_lon": ("init_time", np.array([-11.5], dtype=np.float64)),
+                "ingested_at": ("init_time", [np.datetime64("2024-01-01T01:00")]),
             },
         )
 

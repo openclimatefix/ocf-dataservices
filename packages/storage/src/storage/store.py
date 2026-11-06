@@ -170,7 +170,18 @@ def _write_stats_group(
                 append_dim="month",
                 write_empty_chunks=False,
             )
-            existing_months = np.append(existing_months, month_val)
+            if existing_months.size > 0 and month_val < existing_months[-1]:
+                current_all = xr.open_zarr(store, group=group, consolidated=False).compute()
+                sorted_all = current_all.sortby("month")
+                sorted_all.drop_vars(non_month_coords).to_zarr(
+                    store,
+                    group=group,
+                    region={"month": slice(0, sorted_all.sizes["month"])},
+                )
+                sorted_all[["month"]].to_zarr(store, group=group, mode="a")
+                existing_months = sorted_all["month"].values.astype("datetime64[ns]")
+            else:
+                existing_months = np.append(existing_months, month_val)
 
     return True
 
@@ -327,8 +338,9 @@ def write_to_icechunk(
 
     append_dim = schema.append_dim()
 
-    obj = ds
-    if keep_mantissa_bits is not None:
+    def _round_bits(target: xr.Dataset) -> xr.Dataset:
+        if keep_mantissa_bits is None:
+            return target
         mask = np.int32(~((1 << (23 - keep_mantissa_bits)) - 1))
 
         def apply_veltkamp(da: xr.DataArray) -> xr.DataArray:
@@ -343,7 +355,7 @@ def write_to_icechunk(
                 return da.copy(data=new_data)
             return da
 
-        obj = obj.map(apply_veltkamp, keep_attrs=True)
+        return target.map(apply_veltkamp, keep_attrs=True)
 
     with _local_write_lock(store_path):
         repo, _was_created = open_icechunk_repo(
@@ -364,65 +376,86 @@ def write_to_icechunk(
         except Exception:  # noqa: BLE001
             dataset_exists = False
 
-        obj_to_write = obj
-        ds_for_stats = ds
+        ds_to_write = ds
         skip_write = False
 
         if deduplicate and dataset_exists and existing_ds is not None:
             existing_times = existing_ds[append_dim].values.astype("datetime64[ns]")
-            incoming_times = obj[append_dim].values.astype("datetime64[ns]")
+            incoming_times = ds[append_dim].values.astype("datetime64[ns]")
             is_new = ~np.isin(incoming_times, existing_times)
 
             if not is_new.any():
                 skip_write = True
             else:
-                obj_to_write = obj.isel({append_dim: is_new}).sortby(append_dim)
-                ds_for_stats = ds.isel({append_dim: is_new}).sortby(append_dim)
+                ds_to_write = ds.isel({append_dim: is_new}).sortby(append_dim)
+
+        stats: xr.Dataset | None = None
+        if write_stats:
+            stats = _compute_monthly_stats(ds_to_write, append_dim)
+
+        obj_to_write = ds_to_write if skip_write else _round_bits(ds_to_write)
+
+        if not skip_write:
+            if deduplicate and dataset_exists and existing_ds is not None:
                 obj_to_write.to_zarr(
                     session.store,
                     mode="a",
                     append_dim=append_dim,
                     write_empty_chunks=False,
                 )
-        else:
-            obj.to_zarr(
-                session.store,
-                zarr_format=3,
-                mode="w-",
-                write_empty_chunks=False,
-                encoding={
-                    var: {
-                        "dtype": "float32",
-                        "chunks": tuple(
-                            obj.coords[k].size if v == -1 else v
-                            for k, v in schema._chunks.items()
-                        ),
-                        "shards": tuple(
-                            obj.coords[k].size if v == -1 else v
-                            for k, v in schema._shards.items()
-                        ),
-                        "compressors": zarr.codecs.BloscCodec(
-                            cname="zstd",
-                            clevel=3,
-                            shuffle="bitshuffle",
-                        ),
+            else:
+                obj_to_write.to_zarr(
+                    session.store,
+                    zarr_format=3,
+                    mode="w-",
+                    write_empty_chunks=False,
+                    encoding={
+                        var: {
+                            "dtype": "float32",
+                            "chunks": tuple(
+                                obj_to_write.coords[k].size if v == -1 else v
+                                for k, v in schema._chunks.items()
+                            ),
+                            "shards": tuple(
+                                obj_to_write.coords[k].size if v == -1 else v
+                                for k, v in schema._shards.items()
+                            ),
+                            "compressors": zarr.codecs.BloscCodec(
+                                cname="zstd",
+                                clevel=3,
+                                shuffle="bitshuffle",
+                            ),
+                        }
+                        for var in obj_to_write.data_vars
                     }
-                    for var in obj.data_vars
-                }
-                | {coord: {"chunks": 10000} for coord in obj.coords if coord not in obj.dims}
-                | {
-                    append_dim: {
-                        "dtype": int,
-                        "units": "nanoseconds since 1970-01-01",
-                        "calendar": "proleptic_gregorian",
-                        "chunks": 10000,
+                    | {
+                        coord: (
+                            {
+                                "dtype": int,
+                                "units": "nanoseconds since 1970-01-01",
+                                "calendar": "proleptic_gregorian",
+                                "chunks": 10000,
+                            }
+                            if np.issubdtype(obj_to_write.coords[coord].dtype, np.datetime64)
+                            else (
+                                {"dtype": "<U64", "chunks": 10000}
+                                if np.issubdtype(obj_to_write.coords[coord].dtype, np.str_)
+                                else {"chunks": 10000}
+                            )
+                        )
+                        for coord in obj_to_write.coords
+                        if coord not in obj_to_write.dims
                     }
-                },
-            )
+                    | {
+                        append_dim: {
+                            "dtype": int,
+                            "units": "nanoseconds since 1970-01-01",
+                            "calendar": "proleptic_gregorian",
+                            "chunks": 10000,
+                        }
+                    },
+                )
 
-        stats: xr.Dataset | None = None
-        if write_stats:
-            stats = _compute_monthly_stats(ds_for_stats, append_dim)
         wrote_stats = _write_stats_group(session.store, stats, skip_write)
 
         if not skip_write or wrote_stats:
@@ -435,7 +468,7 @@ def write_to_icechunk(
     written_dims = (
         {str(k): int(v) for k, v in obj_to_write.sizes.items()}
         if not skip_write
-        else {**{str(k): int(v) for k, v in obj.sizes.items()}, append_dim: 0}
+        else {**{str(k): int(v) for k, v in ds.sizes.items()}, append_dim: 0}
     )
 
     return WriteResult(

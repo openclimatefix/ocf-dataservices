@@ -36,6 +36,10 @@ def _global_raw() -> xr.Dataset:
             "latitude": [20.0, 21.0],
             "longitude": [70.0, 71.0],
         },
+        attrs={
+            "GRIB_generatingProcessIdentifier": 128,
+            "GRIB_localTablesVersion": 1,
+        },
     )
 
 
@@ -49,6 +53,9 @@ class TestProcessing(unittest.TestCase):
         # Renamed to canonical names
         self.assertIn("wind_u_10m", out.data_vars)
         self.assertIn("relative_humidity_2m", out.data_vars)
+        self.assertEqual(list(out.coords["generating_process_id"].values), [128])
+        self.assertEqual(list(out.coords["local_tables_version"].values), [1])
+        self.assertIn("ingested_at", out.coords)
 
     def test_validated_entrypoint(self):
         with patch("metoffice_data.processing._read_raw_grib", return_value=_global_raw()):
