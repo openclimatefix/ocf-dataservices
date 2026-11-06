@@ -19,9 +19,9 @@ ecmwf_ens_partitions = dg.TimeWindowPartitionsDefinition(
     start="2024-04-01T00:00",
     timezone="UTC",
     fmt="%Y-%m-%dT%H:%M",
-    end_offset=2,  # Delay keys by 2 intervals (~12 hours) to match availability lag
+    end_offset=-2,  # Delay keys by 2 intervals (~12 hours) to match availability lag
 )
-"""One partition per 6-hourly ECMWF ENS run (00Z, 06Z, 12Z, 18Z). ``end_offset=2`` allows data time to land."""
+"""One partition per 6-hourly ECMWF ENS run (00Z, 06Z, 12Z, 18Z). ``end_offset=-2`` allows data time to land."""
 
 
 @dg.asset(
@@ -160,7 +160,7 @@ def l0_mars_ecmwf_ens_uk_v1(
     key_prefix="nwp",
     partitions_def=ecmwf_ens_partitions,
     group_name="L1",
-    pool="ecmwf_mars",
+    pool="l1_mars_ecmwf_ens_uk",
     io_manager_key="l1_io_manager",
     metadata={
         "schema": MarsEcmwfEnsSchema,
