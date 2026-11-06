@@ -3,7 +3,6 @@ import os
 import tempfile
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Final
 
 import xarray as xr
 from storage.cli import ProductSpec, run_cli
@@ -11,10 +10,6 @@ from storage.cli import ProductSpec, run_cli
 from .download import download_live_ecmwf_partition, get_completed_init_times
 from .processing import process_ecmwf_live_validated
 from .schema import EcmwfLiveSchema
-
-WEST_EUROPE_BBOX_NWSE: Final[list[float]] = [63, -12, 35, 26]
-INDIA_BBOX_NWSE: Final[list[float]] = [35, 67, 6, 97]
-MAX_STEP_HOURS: Final[int] = 84
 
 
 def _make_fetcher(
@@ -74,12 +69,12 @@ def _make_fetcher(
 PRODUCTS: dict[str, ProductSpec] = {
     "hres_west_europe": ProductSpec(
         schema=EcmwfLiveSchema,
-        fetch=_make_fetcher(bbox_nwse=WEST_EUROPE_BBOX_NWSE, max_step_hours=MAX_STEP_HOURS),
+        fetch=_make_fetcher(bbox_nwse=[63, -12, 35, 26], max_step_hours=84),
         description="ECMWF HRES Live West Europe region",
     ),
     "hres_india": ProductSpec(
         schema=EcmwfLiveSchema,
-        fetch=_make_fetcher(bbox_nwse=INDIA_BBOX_NWSE, max_step_hours=MAX_STEP_HOURS),
+        fetch=_make_fetcher(bbox_nwse=[35, 67, 6, 97], max_step_hours=84),
         description="ECMWF HRES Live India region",
     ),
 }
