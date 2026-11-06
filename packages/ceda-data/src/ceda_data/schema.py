@@ -1,0 +1,121 @@
+from typing import ClassVar
+
+import numpy as np
+from pandera.typing.xarray import Coordinate
+from schemas.base import NwpDatasetSchema
+from schemas.nwp_coordinates import (
+    grid_first_lat,
+    grid_first_lon,
+    init_time_coord,
+    latitude,
+    longitude,
+    step,
+    x_osgb,
+    y_osgb,
+)
+from schemas.nwp_variables import (
+    downward_long_wave_radiation_flux_surface,
+    downward_short_wave_radiation_flux_surface,
+    high_cloud_cover,
+    low_cloud_cover,
+    medium_cloud_cover,
+    pressure_reduced_to_mean_sea_level,
+    relative_humidity_2m,
+    snow_depth,
+    temperature_2m,
+    total_cloud_cover_atmosphere,
+    total_precipitation_rate,
+    visibility,
+    wind_u_10m,
+    wind_v_10m,
+)
+
+
+class CedaGlobalWestEuropeSchema(NwpDatasetSchema):
+    _chunks: ClassVar[dict[str, int]] = {"init_time": 1, "step": 1, "latitude": -1, "longitude": -1}
+    _shards: ClassVar[dict[str, int]] = {
+        "init_time": 1,
+        "step": -1,
+        "latitude": -1,
+        "longitude": -1,
+    }
+
+    _dims = ("init_time", "step", "latitude", "longitude")
+
+    # Dimensions
+    init_time: Coordinate[np.datetime64] = init_time_coord()
+    step: Coordinate[np.timedelta64] = step(ge_hours=0, le_hours=144)
+    longitude: Coordinate[np.float64] = longitude(ge=-180, le=180)
+    latitude: Coordinate[np.float64] = latitude(ge=-90, le=90)
+
+    # Auxiliary metadata coordinates on init_time
+    generating_process_id: Coordinate[np.int16] = init_time_coord()
+    grib_tables_version: Coordinate[np.int16] = init_time_coord()
+    ingested_at: Coordinate[np.datetime64] = init_time_coord()
+
+    # Variables (12 variables from CEDA WSGlobal17km)
+    total_cloud_cover_atmosphere: np.float32 = total_cloud_cover_atmosphere(
+        dims=_dims, nullable=False
+    )
+    high_cloud_cover: np.float32 = high_cloud_cover(dims=_dims, nullable=False)
+    medium_cloud_cover: np.float32 = medium_cloud_cover(dims=_dims, nullable=False)
+    low_cloud_cover: np.float32 = low_cloud_cover(dims=_dims, nullable=False)
+    visibility: np.float32 = visibility(dims=_dims, nullable=True)
+    relative_humidity_2m: np.float32 = relative_humidity_2m(dims=_dims, nullable=False)
+    pressure_reduced_to_mean_sea_level: np.float32 = pressure_reduced_to_mean_sea_level(
+        dims=_dims, nullable=False
+    )
+    snow_depth: np.float32 = snow_depth(dims=_dims, nullable=True)
+    downward_short_wave_radiation_flux_surface: np.float32 = (
+        downward_short_wave_radiation_flux_surface(dims=_dims, nullable=True)
+    )
+    temperature_2m: np.float32 = temperature_2m(dims=_dims, nullable=False)
+    wind_u_10m: np.float32 = wind_u_10m(dims=_dims, nullable=True)
+    wind_v_10m: np.float32 = wind_v_10m(dims=_dims, nullable=True)
+
+    class Config(NwpDatasetSchema.Config):
+        pass
+
+
+class CedaUkvSchema(NwpDatasetSchema):
+    _chunks: ClassVar[dict[str, int]] = {"init_time": 1, "step": 1, "y_osgb": -1, "x_osgb": -1}
+    _shards: ClassVar[dict[str, int]] = {"init_time": 1, "step": -1, "y_osgb": -1, "x_osgb": -1}
+
+    _dims = ("init_time", "step", "y_osgb", "x_osgb")
+
+    # Dimensions. CEDA UKV is on the OSGB 2km Transverse Mercator grid (704 x 548).
+    init_time: Coordinate[np.datetime64] = init_time_coord()
+    step: Coordinate[np.timedelta64] = step(ge_hours=0, le_hours=54)
+    y_osgb: Coordinate[np.float64] = y_osgb(ge=-185000, le=1223000)
+    x_osgb: Coordinate[np.float64] = x_osgb(ge=-239000, le=855000)
+
+    # Auxiliary metadata coordinates on init_time
+    generating_process_id: Coordinate[np.int16] = init_time_coord()
+    grib_tables_version: Coordinate[np.int16] = init_time_coord()
+    grid_first_lat: Coordinate[np.float64] = grid_first_lat()
+    grid_first_lon: Coordinate[np.float64] = grid_first_lon()
+    ingested_at: Coordinate[np.datetime64] = init_time_coord()
+
+    # Variables (13 variables from CEDA UKV Wholesale1 + Wholesale2)
+    total_cloud_cover_atmosphere: np.float32 = total_cloud_cover_atmosphere(
+        dims=_dims, nullable=False
+    )
+    high_cloud_cover: np.float32 = high_cloud_cover(dims=_dims, nullable=False)
+    medium_cloud_cover: np.float32 = medium_cloud_cover(dims=_dims, nullable=False)
+    low_cloud_cover: np.float32 = low_cloud_cover(dims=_dims, nullable=False)
+    visibility: np.float32 = visibility(dims=_dims, nullable=True)
+    relative_humidity_2m: np.float32 = relative_humidity_2m(dims=_dims, nullable=False)
+    total_precipitation_rate: np.float32 = total_precipitation_rate(dims=_dims, nullable=True)
+    snow_depth: np.float32 = snow_depth(dims=_dims, nullable=True)
+    downward_long_wave_radiation_flux_surface: np.float32 = (
+        downward_long_wave_radiation_flux_surface(dims=_dims, nullable=True)
+    )
+    downward_short_wave_radiation_flux_surface: np.float32 = (
+        downward_short_wave_radiation_flux_surface(dims=_dims, nullable=True)
+    )
+    temperature_2m: np.float32 = temperature_2m(dims=_dims, nullable=False)
+    wind_u_10m: np.float32 = wind_u_10m(dims=_dims, nullable=True)
+    wind_v_10m: np.float32 = wind_v_10m(dims=_dims, nullable=True)
+
+    class Config(NwpDatasetSchema.Config):
+        pass

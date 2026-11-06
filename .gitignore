@@ -153,5 +153,3 @@ zarr
 # Dagster
 tmp*
 
-# uv
-uv.lock
