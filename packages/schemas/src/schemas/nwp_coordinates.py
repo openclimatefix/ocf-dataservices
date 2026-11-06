@@ -6,12 +6,8 @@ import pandera.xarray as pa
 import xarray as xr
 
 
-def init_time() -> Any:
-    return pa.Field(dims=("init_time",), nullable=False)
-
-
 def init_time_coord() -> Any:
-    """Non-dimension metadata coordinate indexed by `('init_time',)`."""
+    """Coordinate indexed by `('init_time',)` (used for `init_time` and run-level metadata coords)."""
     return pa.Field(dims=("init_time",), nullable=False)
 
 

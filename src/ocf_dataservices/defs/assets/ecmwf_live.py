@@ -87,6 +87,15 @@ def ecmwf_live_s3_sensor(context: dg.SensorEvaluationContext) -> dg.SensorResult
 )
 def l0_ecmwf_live_local_v1(context: dg.AssetExecutionContext) -> dg.Output[Path]:
     """Download ECMWF live files for a specific partition into a local temporary GRIB file."""
+    existing_path = context.resources.l0_io_manager.existing_partition(
+        context.asset_key, context.partition_key
+    )
+    if existing_path is not None:
+        context.log.info(
+            f"Valid L0 GRIB for partition {context.partition_key} already exists at {existing_path}. Skipping download."
+        )
+        return dg.Output(existing_path, metadata={"status": "skipped"})
+
     partition_time = context.partition_time_window.start
 
     fd, temp_path = tempfile.mkstemp(
@@ -107,6 +116,7 @@ def l0_ecmwf_live_local_v1(context: dg.AssetExecutionContext) -> dg.Output[Path]
     )
 
     if num_files == 0:
+        out_path.unlink(missing_ok=True)
         raise dg.RetryRequested(max_retries=3, seconds_to_wait=60)
 
     return dg.Output(out_path, metadata={"num_files": num_files})

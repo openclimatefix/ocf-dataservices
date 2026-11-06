@@ -51,6 +51,15 @@ def _build_order_assets(
         context: dg.AssetExecutionContext, metoffice_client: DagsterDatahubClient
     ) -> dg.Output[Path]:
         """Download the MetOffice DataHub GRIB files for a partition into one local file."""
+        existing_path = context.resources.l0_io_manager.existing_partition(
+            context.asset_key, context.partition_key
+        )
+        if existing_path is not None:
+            context.log.info(
+                f"Valid L0 GRIB for partition {context.partition_key} already exists at {existing_path}. Skipping download."
+            )
+            return dg.Output(existing_path, metadata={"status": "skipped"})
+
         partition_time = context.partition_time_window.start
 
         fd, temp_path = tempfile.mkstemp(
@@ -67,6 +76,7 @@ def _build_order_assets(
         )
 
         if num_files == 0:
+            out_path.unlink(missing_ok=True)
             raise dg.RetryRequested(max_retries=5, seconds_to_wait=600)
 
         return dg.Output(out_path, metadata={"num_files": num_files})

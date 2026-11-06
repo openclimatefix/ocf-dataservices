@@ -5,7 +5,6 @@ from .nwp_coordinates import (
     extract_grib_attr,
     grid_first_lat,
     grid_first_lon,
-    init_time,
     init_time_coord,
     latitude,
     longitude,
@@ -38,9 +37,10 @@ from .nwp_variables import (
     wind_v_100m,
     wind_v_200m,
 )
-from .validation import validates
+from .validation import MIN_GRIB_SIZE_BYTES, is_valid_grib_file, validates
 
 __all__ = [
+    "MIN_GRIB_SIZE_BYTES",
     "NwpDatasetSchema",
     "categorical_precipitation_type_surface",
     "direct_solar_radiation",
@@ -52,8 +52,8 @@ __all__ = [
     "grid_first_lat",
     "grid_first_lon",
     "high_cloud_cover",
-    "init_time",
     "init_time_coord",
+    "is_valid_grib_file",
     "latitude",
     "longitude",
     "low_cloud_cover",

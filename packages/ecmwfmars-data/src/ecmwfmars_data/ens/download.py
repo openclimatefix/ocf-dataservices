@@ -6,7 +6,7 @@ import numpy as np
 import xarray as xr
 from schemas.dim_order import enforce_dim_order
 from schemas.nwp_coordinates import extract_grib_attr, parse_expver_int16, utc_now_coord
-from schemas.validation import validates
+from schemas.validation import is_valid_grib_file, validates
 
 from .client import MarsClient, MarsRequest
 from .schema import MarsEcmwfEnsSchema
@@ -32,6 +32,9 @@ def download_raw(
         numbers: Ensemble member numbers to download.
         target_path: Path where the raw GRIB file will be saved.
     """
+    if is_valid_grib_file(target_path):
+        return
+
     request = MarsRequest.ens(
         params=_MARS_PARAMETERS,
         init_time=init_time,
@@ -42,6 +45,10 @@ def download_raw(
 
     with open(target_path, "wb") as f:
         client.execute(request, f)
+
+    if not is_valid_grib_file(target_path):
+        Path(target_path).unlink(missing_ok=True)
+        raise RuntimeError(f"Downloaded file {target_path} is not a valid GRIB file.")
 
 
 def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:

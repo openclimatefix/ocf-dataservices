@@ -1,11 +1,33 @@
 import functools
+import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import ParamSpec
 
 import pandera.xarray as pa
 import xarray as xr
 
 P = ParamSpec("P")
+
+MIN_GRIB_SIZE_BYTES = 100_000
+
+
+def is_valid_grib_file(
+    path: Path | str,
+    min_size_bytes: int = MIN_GRIB_SIZE_BYTES,
+) -> bool:
+    """Return True if `path` exists, is >= `min_size_bytes`, starts with `'GRIB'`, and ends with `'7777'`."""
+    file_path = Path(path)
+    try:
+        if not file_path.is_file() or file_path.stat().st_size < min_size_bytes:
+            return False
+        with file_path.open("rb") as f:
+            if f.read(4) != b"GRIB":
+                return False
+            f.seek(-4, os.SEEK_END)
+            return f.read(4) == b"7777"
+    except OSError:
+        return False
 
 
 def _describe_null_variables(

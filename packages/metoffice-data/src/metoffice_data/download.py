@@ -1,6 +1,8 @@
 import datetime as dt
 from pathlib import Path
 
+from schemas.validation import is_valid_grib_file
+
 from .client import DatahubClient
 
 
@@ -17,6 +19,9 @@ def download_order_partition(
 
     Returns the number of files downloaded (0 if the init time isn't available yet).
     """
+    if is_valid_grib_file(out_path):
+        return 1
+
     file_ids = client.list_file_ids(order_id=order_id, init_time=init_time)
     if not file_ids:
         return 0
@@ -24,5 +29,11 @@ def download_order_partition(
     with out_path.open("wb") as out_f:
         for file_id in file_ids:
             client.download_file(order_id=order_id, file_id=file_id, target=out_f)
+
+    if not is_valid_grib_file(out_path):
+        out_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"Downloaded file {out_path} for order '{order_id}' is not a valid GRIB file."
+        )
 
     return len(file_ids)
