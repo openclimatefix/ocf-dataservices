@@ -3,7 +3,6 @@ import os
 import tempfile
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Final
 
 import xarray as xr
 from storage.cli import ProductSpec, run_cli
@@ -20,10 +19,6 @@ from .schema import (
     MetOfficeGlobalWesteuropeSchema,
     MetOfficeUkvSchema,
 )
-
-WESTEUROPE_ORDER_ID: Final[str] = "westeurope-12params-54steps"
-INDIA_ORDER_ID: Final[str] = "india-11params-54steps"
-UKV_ORDER_ID: Final[str] = "uk-12params-42steps"
 
 
 def _make_fetcher(
@@ -56,17 +51,17 @@ def _make_fetcher(
 PRODUCTS: dict[str, ProductSpec] = {
     "global_west_europe": ProductSpec(
         schema=MetOfficeGlobalWesteuropeSchema,
-        fetch=_make_fetcher(WESTEUROPE_ORDER_ID, process_metoffice_westeurope),
+        fetch=_make_fetcher("westeurope-12params-54steps", process_metoffice_westeurope),
         description="MetOffice Global West Europe order",
     ),
     "global_india": ProductSpec(
         schema=MetOfficeGlobalIndiaSchema,
-        fetch=_make_fetcher(INDIA_ORDER_ID, process_metoffice_india),
+        fetch=_make_fetcher("india-11params-54steps", process_metoffice_india),
         description="MetOffice Global India order",
     ),
     "ukv_uk": ProductSpec(
         schema=MetOfficeUkvSchema,
-        fetch=_make_fetcher(UKV_ORDER_ID, process_metoffice_ukv),
+        fetch=_make_fetcher("uk-12params-42steps", process_metoffice_ukv),
         description="MetOffice UKV UK order",
     ),
 }

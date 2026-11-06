@@ -12,8 +12,16 @@ from ecmwfmars_data.ens.client import APIException, MarsQueueLimitError, MarsReq
 from ecmwfmars_data.ens.download import _MARS_PARAMETERS, convert_to_dataset
 from ecmwfmars_data.ens.schema import MarsEcmwfEnsSchema
 
-from ocf_dataservices.defs.assets.dynamical import ecmwf_ens_partitions
 from ocf_dataservices.resources.mars import DagsterMarsClient
+
+ecmwf_ens_partitions = dg.TimeWindowPartitionsDefinition(
+    cron_schedule="0 0,6,12,18 * * *",
+    start="2024-04-01T00:00",
+    timezone="UTC",
+    fmt="%Y-%m-%dT%H:%M",
+    end_offset=2,  # Delay keys by 2 intervals (~12 hours) to match availability lag
+)
+"""One partition per 6-hourly ECMWF ENS run (00Z, 06Z, 12Z, 18Z). ``end_offset=2`` allows data time to land."""
 
 
 @dg.asset(

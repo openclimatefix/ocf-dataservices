@@ -1,20 +1,8 @@
 import dagster as dg
 
 from ocf_dataservices.defs.assets import (
-    ecmwf_live_s3_sensor,
-    l0_ecmwf_live_local_v1,
-    l0_ecmwf_live_s3_v1,
     l0_mars_ecmwf_ens_uk_v1,
-    l0_metoffice_india_v1,
-    l0_metoffice_ukv_v1,
-    l0_metoffice_westeurope_v1,
-    l1_dynamical_ecmwf_ens_uk_v1,
-    l1_ecmwf_live_india_v1,
-    l1_ecmwf_live_west_europe_v1,
     l1_mars_ecmwf_ens_uk_v1,
-    l1_metoffice_india_v1,
-    l1_metoffice_ukv_v1,
-    l1_metoffice_westeurope_v1,
 )
 from ocf_dataservices.resources.iomanager_raw_file import (
     RawFileIOManager,
@@ -24,9 +12,6 @@ from ocf_dataservices.resources.iomanager_xarray_icechunk import (
 )
 from ocf_dataservices.resources.mars import (
     DagsterMarsClient,
-)
-from ocf_dataservices.resources.metoffice import (
-    DagsterDatahubClient,
 )
 
 # Using dg.EnvVar is Dagster best practice. It defers the resolution of the
@@ -47,29 +32,12 @@ local_resources = {
         key=dg.EnvVar("ECMWF_API_KEY"),
         email=dg.EnvVar("ECMWF_API_EMAIL"),
     ),
-    "metoffice_client": DagsterDatahubClient(
-        api_key=dg.EnvVar("METOFFICE_API_KEY"),
-    ),
 }
 
 defs = dg.Definitions(
     assets=[
         l0_mars_ecmwf_ens_uk_v1,
         l1_mars_ecmwf_ens_uk_v1,
-        l1_dynamical_ecmwf_ens_uk_v1,
-        l0_ecmwf_live_s3_v1,
-        l0_ecmwf_live_local_v1,
-        l1_ecmwf_live_west_europe_v1,
-        l1_ecmwf_live_india_v1,
-        l0_metoffice_westeurope_v1,
-        l1_metoffice_westeurope_v1,
-        l0_metoffice_india_v1,
-        l1_metoffice_india_v1,
-        l0_metoffice_ukv_v1,
-        l1_metoffice_ukv_v1,
-    ],
-    sensors=[
-        ecmwf_live_s3_sensor,
     ],
     resources=local_resources,
 )
