@@ -6,6 +6,7 @@ from unittest.mock import patch
 import numpy as np
 import xarray as xr
 from ecmwflive_data.cli import PRODUCTS
+from ecmwflive_data.download import get_completed_init_times
 from ecmwflive_data.processing import process_ecmwf_live
 
 
@@ -94,6 +95,30 @@ class TestProcessing(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 PRODUCTS["hres_west_europe"].fetch(t)
             mock_download.assert_not_called()
+
+    def test_get_completed_init_times_december_to_january_rollover(self):
+        """A Dec 29 00Z run whose +168h target time lands on Jan 05 00Z of the next year completes."""
+        with patch("s3fs.S3FileSystem") as mock_fs_cls:
+            mock_fs = mock_fs_cls.return_value
+            mock_fs.ls.return_value = [
+                "bucket/ecmwf/A2D12290000122900001",
+                "bucket/ecmwf/A2D12290000010500001",
+            ]
+            now = dt.datetime.now(dt.UTC)
+            completed = get_completed_init_times(
+                bucket="bucket",
+                access_key="k",
+                secret="s",
+                endpoint_url=None,
+                region_name="eu-west-1",
+                prefix="A2",
+                last_processed=dt.datetime(2000, 1, 1, tzinfo=dt.UTC),
+            )
+            expected_year = now.year - 1 if now.month == 1 else now.year
+            expected_it = dt.datetime(expected_year, 12, 29, 0, 0, tzinfo=dt.UTC)
+            expected_tt = dt.datetime(expected_year + 1, 1, 5, 0, 0, tzinfo=dt.UTC)
+            self.assertIn(expected_it, completed)
+            self.assertEqual(completed[expected_it], expected_tt)
 
 
 if __name__ == "__main__":

@@ -181,6 +181,7 @@ def l0_mars_ecmwf_ens_uk_v1(
     metadata={
         "schema": MarsEcmwfEnsSchema,
     },
+    automation_condition=dg.AutomationCondition.eager(),
     ins={
         "l0_mars_ecmwf_ens_uk_v1": dg.AssetIn(key=dg.AssetKey(["nwp", "l0_mars_ecmwf_ens_uk_v1"]))
     },
@@ -236,6 +237,7 @@ def l0_mars_ecmwf_hres_west_europe_v1(
     metadata={
         "schema": MarsEcmwfHresSchema,
     },
+    automation_condition=dg.AutomationCondition.eager(),
     ins={
         "l0_mars_ecmwf_hres_west_europe_v1": dg.AssetIn(
             key=dg.AssetKey(["nwp", "l0_mars_ecmwf_hres_west_europe_v1"])

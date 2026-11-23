@@ -48,7 +48,8 @@ def get_completed_init_times(
                     year += 1
 
                 it = dt.datetime.strptime(f"{year}{it_str}", "%Y%m%d%H%M").replace(tzinfo=dt.UTC)
-                tt = dt.datetime.strptime(f"{year}{tt_str}", "%Y%m%d%H%M").replace(tzinfo=dt.UTC)
+                tt_year = year + 1 if int(tt_str[:2]) < month else year
+                tt = dt.datetime.strptime(f"{tt_year}{tt_str}", "%Y%m%d%H%M").replace(tzinfo=dt.UTC)
 
                 if it not in init_time_max_steps or tt > init_time_max_steps[it]:
                     init_time_max_steps[it] = tt

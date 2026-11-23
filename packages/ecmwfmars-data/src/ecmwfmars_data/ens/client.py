@@ -208,7 +208,7 @@ class MarsClient:
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
 
         try:
-            res = self.opener.open(req)
+            res = self.opener.open(req, timeout=60)
         except urllib.error.HTTPError as e:
             if e.code <= 299:
                 res = e
@@ -304,10 +304,14 @@ class MarsClient:
             poll_url = endpoint
 
         try:
-            status = response.get("status")
+            status = "complete" if code == 303 else response.get("status")
 
             # Poll the API until completion
             while status != "complete":
+                if status not in ("queued", "active", None):
+                    raise APIException(
+                        f"MARS request failed with status '{status}'. Response: {response}"
+                    )
                 time.sleep(retry_after)
 
                 code, response, new_location, retry_after = self._call("GET", poll_url)
@@ -315,7 +319,7 @@ class MarsClient:
                 if new_location:
                     poll_url = urllib.parse.urljoin(poll_url, new_location)
 
-                status = response.get("status", status)
+                status = "complete" if code == 303 else response.get("status", status)
 
             # In cases of an HTTP 303, the response dictionary is the result
             result_obj = response if code == 303 else response.get("result", {})
@@ -346,7 +350,7 @@ class MarsClient:
         req = urllib.request.Request(url)
         bytes_transferred = 0
 
-        with closing(urllib.request.urlopen(req)) as http:
+        with closing(urllib.request.urlopen(req, timeout=120)) as http:
             while True:
                 chunk = http.read(1048576)  # Read 1MB at a time
                 if not chunk:
@@ -355,6 +359,6 @@ class MarsClient:
                 bytes_transferred += len(chunk)
 
         if expected_size and bytes_transferred != expected_size:
-            logger.warning(
-                f"WARNING: Expected {expected_size} bytes, but transferred {bytes_transferred} bytes."
+            raise APIException(
+                f"Expected {expected_size} bytes, but transferred {bytes_transferred} bytes."
             )

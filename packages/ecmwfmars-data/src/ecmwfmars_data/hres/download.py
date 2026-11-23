@@ -1,4 +1,5 @@
 import datetime as dt
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
@@ -93,7 +94,11 @@ def _read_raw_hres_grib(grib_path: Path | str) -> xr.Dataset:
     return xr.merge(datasets, compat="override", combine_attrs="override")
 
 
-def _transform_hres(ds: xr.Dataset, max_step_hours: int = 84) -> xr.Dataset:
+def _transform_hres(
+    ds: xr.Dataset,
+    bbox_nwse: Sequence[float] = HRES_WEST_EUROPE_BBOX_NWSE,
+    max_step_hours: int = 84,
+) -> xr.Dataset:
     """Rename, convert units, de-accumulate radiation, and reorder dimensions to MarsEcmwfHresSchema."""
     cycle_val = int(extract_grib_attr(ds, "generatingProcessIdentifier", -1))
     expver_val = parse_expver_int16(extract_grib_attr(ds, "expver", -1))
@@ -101,6 +106,17 @@ def _transform_hres(ds: xr.Dataset, max_step_hours: int = 84) -> xr.Dataset:
 
     if "longitude" in ds.coords and float(ds.longitude.max()) > 180:
         ds = ds.assign_coords(longitude=(((ds.longitude + 180) % 360) - 180)).sortby("longitude")
+
+    n, w, s, e = bbox_nwse
+    if "latitude" in ds.coords and "longitude" in ds.coords:
+        lat_slice = (
+            slice(s, n)
+            if ds.latitude.size > 1 and float(ds.latitude[0]) < float(ds.latitude[-1])
+            else slice(n, s)
+        )
+        ds = ds.sel(latitude=lat_slice, longitude=slice(w, e))
+        if ds.sizes.get("latitude", 0) == 0 or ds.sizes.get("longitude", 0) == 0:
+            raise ValueError(f"Empty spatial slice for bbox {bbox_nwse}: sizes={dict(ds.sizes)}")
 
     if "time" in ds.coords:
         ds = ds.rename({"time": "init_time"})
@@ -193,6 +209,14 @@ def _transform_hres(ds: xr.Dataset, max_step_hours: int = 84) -> xr.Dataset:
 
 
 @validates(MarsEcmwfHresSchema)
-def convert_hres_to_dataset(grib_path: Path | str, max_step_hours: int = 84) -> xr.Dataset:
+def convert_hres_to_dataset(
+    grib_path: Path | str,
+    bbox_nwse: Sequence[float] = HRES_WEST_EUROPE_BBOX_NWSE,
+    max_step_hours: int = 84,
+) -> xr.Dataset:
     """Convert a raw ECMWF MARS HRES GRIB file to an xarray Dataset matching MarsEcmwfHresSchema."""
-    return _transform_hres(_read_raw_hres_grib(grib_path), max_step_hours=max_step_hours)
+    return _transform_hres(
+        _read_raw_hres_grib(grib_path),
+        bbox_nwse=bbox_nwse,
+        max_step_hours=max_step_hours,
+    )
