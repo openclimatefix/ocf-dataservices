@@ -1,0 +1,70 @@
+from typing import Any, ClassVar
+
+import numpy as np
+import pandera.xarray as pa
+import xarray as xr
+from pandera import check, dataframe_check
+from pandera.api.xarray.model_config import DatasetConfig
+
+
+class _NwpDatasetConfig(DatasetConfig):
+    strict = "filter"  # Drops unlisted variables
+    strict_coords = "filter"  # Drops unlisted coordinates
+
+
+class NwpDatasetSchema(pa.DatasetModel):
+    """Base Pandera schema for NWP `xarray.Dataset` objects.
+
+    Subclasses must declare non-empty `_dims`, `_chunks`, and `_shards` class attributes with
+    identical dimension keys.
+
+    This schema validates dataset dimension order, coordinate types, nullability, and physical unit
+    bounds. Spatial coordinates (`latitude`, `longitude`) are checked against global bounds only;
+    provider packages must slice data to the target regional bounding box before validation runs.
+    """
+
+    _dims: ClassVar[tuple[str, ...]] = ()
+    _chunks: ClassVar[dict[str, int]] = {}
+    _shards: ClassVar[dict[str, int]] = {}
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        if not cls._dims:
+            raise ValueError(f"{cls.__name__} must declare a non-empty `_dims` tuple.")
+        if not cls._chunks or tuple(cls._chunks.keys()) != tuple(cls._dims):
+            raise ValueError(
+                f"{cls.__name__}._chunks keys {list(cls._chunks.keys())} must match `_dims` "
+                f"{list(cls._dims)}."
+            )
+        if not cls._shards or tuple(cls._shards.keys()) != tuple(cls._dims):
+            raise ValueError(
+                f"{cls.__name__}._shards keys {list(cls._shards.keys())} must match `_dims` "
+                f"{list(cls._dims)}."
+            )
+        cls.Config = type(
+            "Config",
+            (cls.Config,),
+            {"dims": tuple(cls._dims), "ordered_dims": True},
+        )
+        super().__init_subclass__(**kwargs)
+
+    @classmethod
+    def dims(cls) -> tuple[str, ...]:
+        return cls._dims
+
+    @classmethod
+    def append_dim(cls) -> str:
+        return cls._dims[0]
+
+    @dataframe_check
+    def _dims_ordered_and_non_empty(cls, ds: xr.Dataset) -> bool:
+        """Verify that the dataset dimension order matches `_dims` and no dimension is empty."""
+        return tuple(ds.dims) == tuple(cls._dims) and all(ds.sizes[d] > 0 for d in cls._dims)
+
+    @check("step", "init_time", "ensemble_member", regex=True)
+    def _coord_strictly_increasing(cls, da: xr.DataArray) -> bool:
+        """Verify that time and ensemble coordinates are strictly increasing."""
+        if da.size <= 1:
+            return True
+        return bool(np.all(da.values[:-1] < da.values[1:]))
+
+    Config: type[DatasetConfig] = _NwpDatasetConfig

@@ -1,141 +1,156 @@
-# Dagster Dags
+# ocf-dataservices
 
-**Orchestrate data pipelines for ML dataset creation**
+`ocf-dataservices` ingests, validates, and converts Numerical Weather Prediction (NWP) datasets
+into a standardized [Icechunk](https://icechunk.io) (Zarr v3) storage format for Open Climate Fix
+machine learning pipelines.
 
-[![tags badge](https://img.shields.io/github/v/tag/openclimatefix/dagster-dags?include_prereleases&sort=semver&color=7BCDF3)](https://github.com/openclimatefix/dagster-dags/tags)
-[![contributors badge](https://img.shields.io/github/contributors/openclimatefix/dagster-dags?color=FFFFFF)](https://github.com/openclimatefix/dagster-dags/graphs/contributors)
-[![workflows badge](https://img.shields.io/github/actions/workflow/status/openclimatefix/dagster-dags/branch_ci.yml?branch=main&color=FFD053)](https://github.com/openclimatefix/dagster-dags/actions/workflows/branch_ci.yml)
-[![ease of contribution: easy](https://img.shields.io/badge/ease%20of%20contribution:%20easy-32bd50)](https://github.com/openclimatefix/ocf-meta-repo?tab=readme-ov-file#overview-of-ocfs-nowcasting-repositories)
+Each data module runs in two modes:
+1. **Dagster mode**: Orchestrated archive backfills and scheduled runs via [Dagster](https://dagster.io).
+2. **Standalone CLI mode**: Direct container execution outside Dagster using the shared CLI runner
+   in `packages/storage`.
 
-In order to train and evaluate an ML model, datasets must be created consistently and reproducibly.
+## Architecture
 
-Forecasting renewable energy generation depends on large-timescale weather data:
-Numerical Weather Prediction (NWP) data; satellite imagery;
-atmospheric quality data. Dagster helps to these datasets organised and up to date.
+This repository is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/) with
+three layers:
 
-This repository contains the Dagster definitions that orchestrate the creation of these datasets.
+- **`src/ocf_dataservices`**: The Dagster orchestration layer. It defines assets (`defs/`), IO
+  managers, and resources (`resources/`), and registers them in `definitions.py`. It contains no
+  provider-specific parsing logic.
+- **`packages/*-data`**: Provider data modules. Each module is an isolated workspace package with
+  its own dependencies, schema, download client, transform logic, and standalone CLI entrypoint.
+- **`packages/storage`**: Shared Icechunk storage writer (`storage.store`) and standalone CLI
+  runner (`storage.cli`). Both Dagster (`XarrayIcechunkIOManager`) and the standalone package CLIs
+  call `storage.store.write_to_icechunk`.
+- **`packages/schemas`**: Shared [Pandera](https://pandera.readthedocs.io/) validation base model
+  (`NwpDatasetSchema`), coordinate and variable field builders, dimension ordering helpers, and GRIB
+  file verification.
 
-## Installation
+Dependencies flow in one direction:
+`ocf_dataservices` -> `packages/*-data` -> `packages/storage` -> `packages/schemas`.
 
-The repository is packaged as a Docker image that can be used as a Dagster
-[code server](https://docs.dagster.io/concepts/code-locations/workspace-files#running-your-own-grpc-server)
+### Provider packages
+
+| Package | CLI command | `--product` values | Source |
+|---|---|---|---|
+| `ceda-data` | `ceda-data` | `ukv_uk`, `global_west_europe` | CEDA DAP MetOffice archive |
+| `dynamical-data` | `dynamical-data` | `ens_uk` | Dynamical.org public Zarr archive |
+| `ecmwflive-data` | `ecmwflive-data` | `hres_west_europe`, `hres_india` | ECMWF real-time S3 GRIB dissemination |
+| `ecmwfmars-data` | `ecmwfmars-data` | `ens_uk`, `hres_west_europe` | ECMWF MARS archive API |
+| `metoffice-data` | `metoffice-data` | `global_west_europe`, `global_india`, `ukv_uk` | MetOffice Weather DataHub order API |
+
+## Asset tiers: L0 / L1 / L2
+
+Dagster assets are organized into three tiers:
+
+- **L0 (raw)**: Data stored in its original format (such as a multi-message GRIB file) via
+  `RawFileIOManager`. Each L0 file is verified for minimum byte size (`>= 100 KB`), the leading
+  `GRIB` magic header, and the trailing `7777` end-of-message marker.
+- **L1 (validated)**: Data parsed into an `xarray.Dataset`, renamed to canonical variable names,
+  converted to standard units, and validated against a `pandera` schema. `XarrayIcechunkIOManager`
+  writes the dataset to an Icechunk repository and updates the monthly `stats` group. Machine
+  learning pipelines read from this tier.
+- **L2 (derived)**: Reserved for derived datasets such as multi-provider blends or resampled grids.
+
+## Standalone container usage
+
+The container image built from `Containerfile` installs all workspace packages and their CLI
+entrypoints into `/app/.venv/bin`.
+
+To run a single forecast initialization time in a container:
 
 ```bash
-$ docker pull ghcr.io/openclimatefix/dagster-dags
+docker run --rm --env-file .env \
+  ghcr.io/openclimatefix/ocf-dataservices:devsjc-rewrite \
+  ecmwfmars-data \
+  --product hres_west_europe \
+  --init-time 2026-01-10T12:00 \
+  --store-path s3://my-example-bucket/west-europe.icechunk
 ```
 
-## Example Usage
-
-**To add as a code location in an existing Dagster setup:**
+To run a range of forecast initialization times:
 
 ```bash
-$ docker run -d \
-    -p 4266:4266 \
-    -e DAGSTER_CURRENT_IMAGE=ghcr.io/openclimatefix/dagster-dags \
-    ghcr.io/openclimatefix/dagster-dags
+docker run --rm --env-file .env \
+  ghcr.io/openclimatefix/ocf-dataservices:devsjc-rewrite \
+  ceda-data \
+  --product ukv_uk \
+  --start 2024-01-01T00:00 \
+  --end 2024-01-31T18:00 \
+  --step-hours 6 \
+  --store-path s3://my-example-bucket/ceda-ukv.icechunk
 ```
 
-```yaml
-# $DAGSTER_HOME/workspace.yaml
+Pass `--no-write-stats` to skip computing and updating the monthly `stats` Zarr group during standalone CLI runs.
 
-load_from:
-  - grpc_server:
-      host: localhost
-      port: 4266
-      location_name: "dagster-dags" # Name of the module
+## Structure of a data module
+
+Every data module follows a standard directory layout:
+
+```
+packages/<provider>-data/
+  pyproject.toml            # Provider dependencies, `schemas`, `storage`, and `[project.scripts]`
+  README.md
+  src/<provider>_data/
+    schema.py               # Pandera schema: dimensions, bounds, and chunk/shard layout
+    download.py             # Raw file download functions
+    processing.py           # `_read_raw_grib` -> `_transform` -> `@validates(Schema)` entrypoint
+    client.py               # Optional API client wrapper
+    cli.py                  # Standalone CLI entrypoint using `storage.cli.run_cli`
+  tests/
+    test_*.py
 ```
 
-> [!Note]
-> Setting `DAGSTER_CURRENT_IMAGE` environment variable is necessary to tell Dagster
-> to spawn jobs using the set container image. Since the Containerfile has all the
-> required dependencies for the user code, it makes sense to set it to itself.
+### Fetch, transform, and validate pattern
 
-**To deploy the entire Dagster multi-container stack:**
+Each module separates data ingestion into three steps:
 
-```bash
-$ docker compose up -f infrastructure/docker-compose.yml
-```
+1. **Fetch** (`_read_raw_grib` or `_compute`): Performs all file or network I/O and returns raw
+   `xarray` objects with native provider variable names.
+2. **Transform** (`_transform`): Performs pure in-memory transformations. It extracts GRIB metadata
+   attributes into `init_time` auxiliary coordinates, renames variables and coordinates, converts
+   units, slices spatial and temporal bounds, and calls `schemas.dim_order.enforce_dim_order`.
+3. **Validated entrypoint**: Composes the fetch and transform steps and applies the
+   `@schemas.validates(Schema)` decorator. Callers must use this function to guarantee schema
+   compliance.
 
-> [!Note]
-> This will start a full Dagster setup with a web UI, a Postgres database,
-> and a QueuedRunCoordinator. This might be overkill for some setups.
+## Adding a new data module
 
-## Documentation
-
-The repository is split into folders covering the basic concepts of Dagster:
-
-- Top-level [Definitions](https://docs.dagster.io/concepts/code-locations) defining the code location are defined in `src/dagster_dags/definitions.py`
-- [Assets](https://docs.dagster.io/concepts/assets/software-defined-assets) are in `src/dagster_dags/assets`
-- [Resources](https://docs.dagster.io/concepts/resources#resources) are in `src/dagster_dags/resources`
-
-They are then subdivided by module into data-type-specific folders.
+1. Create `packages/<provider>-data/` with `pyproject.toml`, `src/<provider>_data/__init__.py`, and
+   `tests/`.
+2. Add `<provider>-data` to the root `pyproject.toml` under `dependencies` and `[tool.uv.sources]`,
+   then run `uv sync --all-packages`.
+3. Define the product schema in `schema.py` by subclassing `schemas.base.NwpDatasetSchema`.
+4. Implement the fetch, transform, and `@schemas.validates` functions in `download.py` and
+   `processing.py`.
+5. Implement `cli.py` using `storage.cli.ProductSpec` and `storage.cli.run_cli`, and register the
+   script in `packages/<provider>-data/pyproject.toml` under `[project.scripts]`.
+6. Add unit tests under `packages/<provider>-data/tests/` testing `_transform` with synthetic
+   datasets and testing the validated entrypoint with mocked I/O.
+7. If the module is orchestrated by Dagster, add L0 and L1 assets under
+   `src/ocf_dataservices/defs/assets/` and register them in `src/ocf_dataservices/definitions.py`.
 
 ## Development
 
-To run a development Dagster server, install the required dependencies in a virtual environment,
-activate it, and run the server:
+- `make run`: Start the local Dagster UI and daemon (`uv run dg dev`).
+- `make lint`: Run Ruff (`uv run ruff check --fix .`).
+- `make test`: Run the full unit test suite across `tests/` and `packages/*/tests`.
+- `uv run ty check`: Run static type checking across the workspace.
 
-```bash
-$ cd scr && dagster dev --module-name=dagster_dags
-```
+## Deployment
 
-This should spawn a UI at `localhost:3000` where you can interact with the Dagster webserver.
+`Containerfile` builds a self-contained image containing the virtual environment at `/app/.venv`.
+By default, it starts the Dagster gRPC code server (`dagster api grpc -m ocf_dataservices.definitions`).
 
-### Linting and static type checking
+`docker-compose.yaml` runs the full Dagster service stack (`dagster-postgres`, `dagster-codeserver`,
+`dagster-webserver`, and `dagster-daemon`). Runs execute in isolated containers via
+`dagster_docker.DockerRunLauncher`.
 
-This project uses [MyPy](https://mypy.readthedocs.io/en/stable/) for static type checking
-and [Ruff](https://docs.astral.sh/ruff/) for linting.
-Installing the development dependencies makes them available in your virtual environment.
+To deploy on a host:
 
-Use them via:
-
-```bash
-$ python -m mypy .
-$ python -m ruff check .
-```
-
-Be sure to do this periodically while developing to catch any errors early
-and prevent headaches with the CI pipeline. It may seem like a hassle at first,
-but it prevents accidental creation of a whole suite of bugs.
-
-### Running the test suite
-
-Run the unittests with:
-
-```bash
-$ python -m unittest discover -s tests
-```
-
-## Further Reading
-
-On running your own GRPC code server as a code location in Dagster:
-- Dagster guide on [running a GRPC server](https://docs.dagster.io/concepts/code-locations/workspace-files#running-your-own-grpc-server).
-- Creating a GRPC code server container as part of a [multi-container Dagster stack](https://docs.dagster.io/deployment/guides/docker#multi-container-docker-deployment).
-
-
----
-
-## Contributing and community
-
-[![issues badge](https://img.shields.io/github/issues/openclimatefix/dagster-dags?color=FFAC5F)](https://github.com/openclimatefixdagster-dags/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc)
-
-- PR's are welcome! See the [Organisation Profile](https://github.com/openclimatefix) for details on contributing
-- Find out about our other projects in the [OCF Meta Repo](https://github.com/openclimatefix/ocf-meta-repo)
-- Check out the [OCF blog](https://openclimatefix.org/blog) for updates
-- Follow OCF on [LinkedIn](https://uk.linkedin.com/company/open-climate-fix)
-
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-
-<!-- markdownlint-restore -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
-
----
-
-*Part of the [Open Climate Fix](https://github.com/orgs/openclimatefix/people) community.*
-
-[![OCF Logo](https://cdn.prod.website-files.com/62d92550f6774db58d441cca/6324a2038936ecda71599a8b_OCF_Logo_black_trans.png)](https://openclimatefix.org)
-
+1. Copy `docker-compose.yaml` to `/etc/dagster/docker-compose.yaml`.
+2. Create `/etc/dagster/.env` with required environment variables (`L0_ROOT_PATH`, `L1_ROOT_PATH`,
+   `ECMWF_API_KEY`, `ECMWF_API_EMAIL`, `ECMWF_API_URL`, `CEDA_USER`, `CEDA_PASS`,
+   `ECMWF_REALTIME_S3_BUCKET`, `ECMWF_REALTIME_S3_ACCESS_KEY`, `ECMWF_REALTIME_S3_ACCESS_SECRET`,
+   `METOFFICE_API_KEY`).
+3. Start the stack with `docker compose -f /etc/dagster/docker-compose.yaml up -d`.
