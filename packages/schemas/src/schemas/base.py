@@ -4,6 +4,12 @@ import numpy as np
 import pandera.xarray as pa
 import xarray as xr
 from pandera import check, dataframe_check
+from pandera.api.xarray.model_config import DatasetConfig
+
+
+class _NwpDatasetConfig(DatasetConfig):
+    strict = "filter"  # Drops unlisted variables
+    strict_coords = "filter"  # Drops unlisted coordinates
 
 
 class NwpDatasetSchema(pa.DatasetModel):
@@ -100,6 +106,4 @@ class NwpDatasetSchema(pa.DatasetModel):
         strictly_increases = bool((diffs > 0).any())
         return not (never_decreases and strictly_increases)
 
-    class Config:
-        strict = "filter"  # Drops unlisted variables
-        strict_coords = "filter"  # Drops unlisted coordinates
+    Config: type[DatasetConfig] = _NwpDatasetConfig

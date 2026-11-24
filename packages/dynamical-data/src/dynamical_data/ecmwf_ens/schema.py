@@ -89,6 +89,3 @@ class DynamicalEcmwfEnsSchema(NwpDatasetSchema):
     )
     def max_2_percent_null(cls, da: xr.DataArray) -> bool:
         return float(da.isnull().mean()) < 0.02
-
-    class Config(NwpDatasetSchema.Config):
-        pass

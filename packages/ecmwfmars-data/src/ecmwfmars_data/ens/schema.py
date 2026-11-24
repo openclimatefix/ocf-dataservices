@@ -58,6 +58,3 @@ class MarsEcmwfEnsSchema(NwpDatasetSchema):
     high_cloud_cover: np.float32 = high_cloud_cover(dims=_dims, nullable=False)
     medium_cloud_cover: np.float32 = medium_cloud_cover(dims=_dims, nullable=False)
     low_cloud_cover: np.float32 = low_cloud_cover(dims=_dims, nullable=False)
-
-    class Config(NwpDatasetSchema.Config):
-        pass

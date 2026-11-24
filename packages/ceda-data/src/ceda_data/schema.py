@@ -73,9 +73,6 @@ class CedaGlobalWestEuropeSchema(NwpDatasetSchema):
     wind_u_10m: np.float32 = wind_u_10m(dims=_dims, nullable=True)
     wind_v_10m: np.float32 = wind_v_10m(dims=_dims, nullable=True)
 
-    class Config(NwpDatasetSchema.Config):
-        pass
-
 
 class CedaUkvSchema(NwpDatasetSchema):
     _chunks: ClassVar[dict[str, int]] = {"init_time": 1, "step": 1, "y_osgb": -1, "x_osgb": -1}
@@ -116,6 +113,3 @@ class CedaUkvSchema(NwpDatasetSchema):
     temperature_2m: np.float32 = temperature_2m(dims=_dims, nullable=False)
     wind_u_10m: np.float32 = wind_u_10m(dims=_dims, nullable=True)
     wind_v_10m: np.float32 = wind_v_10m(dims=_dims, nullable=True)
-
-    class Config(NwpDatasetSchema.Config):
-        pass

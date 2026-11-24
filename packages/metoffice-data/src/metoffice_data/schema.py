@@ -73,9 +73,6 @@ class MetOfficeGlobalWesteuropeSchema(NwpDatasetSchema):
     wind_u_10m: np.float32 = wind_u_10m(dims=_dims, nullable=True)
     wind_v_10m: np.float32 = wind_v_10m(dims=_dims, nullable=True)
 
-    class Config(NwpDatasetSchema.Config):
-        pass
-
 
 class MetOfficeGlobalIndiaSchema(NwpDatasetSchema):
     _chunks: ClassVar[dict[str, int]] = {"init_time": 1, "step": 1, "latitude": -1, "longitude": -1}
@@ -116,9 +113,6 @@ class MetOfficeGlobalIndiaSchema(NwpDatasetSchema):
     wind_u_10m: np.float32 = wind_u_10m(dims=_dims, nullable=True)
     wind_v_10m: np.float32 = wind_v_10m(dims=_dims, nullable=True)
 
-    class Config(NwpDatasetSchema.Config):
-        pass
-
 
 class MetOfficeUkvSchema(NwpDatasetSchema):
     _chunks: ClassVar[dict[str, int]] = {"init_time": 1, "step": 1, "y_laea": -1, "x_laea": -1}
@@ -157,6 +151,3 @@ class MetOfficeUkvSchema(NwpDatasetSchema):
     temperature_2m: np.float32 = temperature_2m(dims=_dims, nullable=False)
     wind_u_10m: np.float32 = wind_u_10m(dims=_dims, nullable=True)
     wind_v_10m: np.float32 = wind_v_10m(dims=_dims, nullable=True)
-
-    class Config(NwpDatasetSchema.Config):
-        pass

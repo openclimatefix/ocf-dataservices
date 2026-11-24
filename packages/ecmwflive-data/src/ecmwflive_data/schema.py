@@ -74,6 +74,3 @@ class EcmwfLiveSchema(NwpDatasetSchema):
         dims=_dims, nullable=False
     )
     visibility: np.float32 = visibility(dims=_dims, nullable=True)
-
-    class Config(NwpDatasetSchema.Config):
-        pass
