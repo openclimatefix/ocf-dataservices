@@ -11,6 +11,7 @@ from ceda_data.processing import (
     _UKV_X_OSGB,
     _UKV_Y_OSGB,
     _assign_ukv_osgb_coords,
+    _read_raw_grib,
     process_ceda_global_west_europe,
     process_ceda_ukv,
 )
@@ -226,6 +227,36 @@ class TestCedaProcessing(unittest.TestCase):
             self.assertEqual(client.fetch_bytes.call_count, 12)
             for call in client.fetch_bytes.call_args_list:
                 self.assertIn("_AreaA_", call.args[0])
+
+    def test_read_raw_grib_keeps_tcc_when_rh_shares_parameter_number_1(self) -> None:
+        import tempfile
+
+        import eccodes
+
+        with tempfile.NamedTemporaryFile(suffix=".grib2") as f:
+            gid_rh = eccodes.codes_grib_new_from_samples("regular_ll_sfc_grib2")
+            eccodes.codes_set(gid_rh, "discipline", 0)
+            eccodes.codes_set(gid_rh, "parameterCategory", 1)
+            eccodes.codes_set(gid_rh, "parameterNumber", 1)
+            eccodes.codes_set(gid_rh, "typeOfFirstFixedSurface", 103)
+            eccodes.codes_set(gid_rh, "scaledValueOfFirstFixedSurface", 2)
+            eccodes.codes_set(gid_rh, "scaleFactorOfFirstFixedSurface", 0)
+            eccodes.codes_write(gid_rh, f)
+            eccodes.codes_release(gid_rh)
+
+            gid_tcc = eccodes.codes_grib_new_from_samples("regular_ll_sfc_grib2")
+            eccodes.codes_set(gid_tcc, "centre", 74)
+            eccodes.codes_set(gid_tcc, "discipline", 0)
+            eccodes.codes_set(gid_tcc, "parameterCategory", 6)
+            eccodes.codes_set(gid_tcc, "parameterNumber", 1)
+            eccodes.codes_set(gid_tcc, "typeOfFirstFixedSurface", 1)
+            eccodes.codes_write(gid_tcc, f)
+            eccodes.codes_release(gid_tcc)
+            f.flush()
+
+            found = {v for ds in _read_raw_grib(f.name) for v in ds.data_vars}
+            self.assertIn("tcc", found)
+            self.assertTrue({"r", "r2"} & found)
 
 
 if __name__ == "__main__":

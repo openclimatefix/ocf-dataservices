@@ -137,7 +137,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
     keep_mantissa_bits: int | None = 14
 
     def _get_store_path(self, asset_key: dg.AssetKey) -> str:
-        return "/".join([self.path] + list(asset_key.path))
+        return "/".join([self.path.rstrip("/")] + list(asset_key.path))
 
     def _get_repo(
         self, store_path: str, create_if_not_exists: bool = False

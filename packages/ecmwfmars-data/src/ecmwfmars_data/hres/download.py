@@ -8,6 +8,7 @@ import numpy as np
 import xarray as xr
 from schemas.dim_order import enforce_dim_order
 from schemas.nwp_coordinates import extract_grib_attr, parse_expver_int16, utc_now_coord
+from schemas.nwp_variables import scale_to_percent
 from schemas.validation import is_valid_grib_file, validates
 
 from ..ens.client import MarsClient, MarsRequest
@@ -164,9 +165,7 @@ def _transform_hres(
         "total_cloud_cover_atmosphere",
     ):
         if cloud_var in ds.data_vars:
-            if float(ds[cloud_var].max()) <= 1.1:
-                ds[cloud_var] = ds[cloud_var] * 100.0
-            ds[cloud_var] = np.clip(ds[cloud_var], a_min=0.0, a_max=100.0)
+            ds[cloud_var] = scale_to_percent(ds[cloud_var])
 
     rad_vars = [
         v

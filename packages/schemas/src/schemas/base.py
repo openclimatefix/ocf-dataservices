@@ -67,38 +67,4 @@ class NwpDatasetSchema(pa.DatasetModel):
             return True
         return bool(np.all(da.values[:-1] < da.values[1:]))
 
-    @check(
-        "total_cloud_cover_atmosphere",
-        "high_cloud_cover",
-        "medium_cloud_cover",
-        "low_cloud_cover",
-        "relative_humidity_2m",
-        regex=True,
-    )
-    def _is_percent_not_fraction(cls, da: xr.DataArray) -> bool:
-        """Verify that percentage fields are scaled to `[0, 100]` rather than `[0, 1]`."""
-        if da.size == 0 or bool(da.isnull().all()):
-            return False
-        max_val = float(da.max())
-        return max_val > 1.1 or max_val == 0.0
-
-    @check(
-        "downward_short_wave_radiation_flux_surface",
-        "downward_long_wave_radiation_flux_surface",
-        "direct_solar_radiation",
-        "uv_b_radiation",
-        "total_precipitation_rate",
-        regex=True,
-    )
-    def _is_instantaneous_not_cumulative(cls, da: xr.DataArray) -> bool:
-        """Reject fields that monotonically accumulate along `step` instead of representing rates."""
-        if "step" not in da.dims or da.sizes["step"] < 2:
-            return True
-        diffs = da.diff("step")
-        if not bool(diffs.notnull().any()):
-            return True
-        never_decreases = not bool((diffs < 0).any())
-        strictly_increases = bool((diffs > 0).any())
-        return not (never_decreases and strictly_increases)
-
     Config: type[DatasetConfig] = _NwpDatasetConfig

@@ -7,6 +7,7 @@ import numpy as np
 import xarray as xr
 from schemas.dim_order import enforce_dim_order
 from schemas.nwp_coordinates import extract_grib_attr, utc_now_coord
+from schemas.nwp_variables import scale_to_percent
 from schemas.validation import validates
 
 from .schema import CedaGlobalWestEuropeSchema, CedaUkvSchema
@@ -77,17 +78,17 @@ def _read_raw_grib(grib_path: Path | str) -> list[xr.Dataset]:
 
     for param_num, target_name in parameter_number_names.items():
         try:
-            ds_param = xr.open_dataset(
+            ds_params = cfgrib.open_datasets(
                 grib_path,
-                engine="cfgrib",
                 backend_kwargs={
                     "indexpath": "",
                     "read_keys": read_keys,
-                    "filter_by_keys": {"parameterNumber": param_num},
+                    "filter_by_keys": {"shortName": "unknown", "parameterNumber": param_num},
                 },
             )
-            if "unknown" in ds_param.data_vars:
-                datasets.append(ds_param.rename({"unknown": target_name}))
+            for ds_param in ds_params:
+                if "unknown" in ds_param.data_vars:
+                    datasets.append(ds_param.rename({"unknown": target_name}))
         except Exception:  # noqa: S110, BLE001
             pass
 
@@ -282,9 +283,7 @@ def _transform(
         "relative_humidity_2m",
     ):
         if pct_var in ds.data_vars:
-            if float(ds[pct_var].max()) <= 1.1:
-                ds[pct_var] = ds[pct_var] * 100.0
-            ds[pct_var] = np.clip(ds[pct_var], a_min=0.0, a_max=100.0)
+            ds[pct_var] = scale_to_percent(ds[pct_var])
 
     for rad_var in (
         "downward_short_wave_radiation_flux_surface",

@@ -1,9 +1,11 @@
 import datetime as dt
 import fcntl
+import os
 import random
 import re
 import time
 import warnings
+from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +13,7 @@ from pathlib import Path
 import icechunk
 import numpy as np
 import xarray as xr
+import zarr
 import zarr.codecs
 from schemas.base import NwpDatasetSchema
 
@@ -210,13 +213,23 @@ def open_icechunk_repo(
     if result:
         match (result.group("protocol"), result.group("bucket"), result.group("prefix")):
             case ("s3", bucket, prefix):
+                has_static_creds = bool(aws_access_key_id and aws_secret_access_key)
+                effective_endpoint = (
+                    aws_endpoint_url
+                    or (None if has_static_creds else os.getenv("AWS_ENDPOINT_URL"))
+                    or None
+                )
                 storage = icechunk.s3_storage(
                     bucket=bucket,
                     prefix=prefix,
-                    access_key_id=aws_access_key_id,
-                    secret_access_key=aws_secret_access_key,
-                    region=aws_region_name,
-                    endpoint_url=aws_endpoint_url,
+                    access_key_id=aws_access_key_id if has_static_creds else None,
+                    secret_access_key=aws_secret_access_key if has_static_creds else None,
+                    region=aws_region_name or None,
+                    endpoint_url=aws_endpoint_url or None,
+                    from_env=not has_static_creds,
+                    allow_http=bool(
+                        effective_endpoint and effective_endpoint.startswith("http://")
+                    ),
                 )
             case (_, _, _):
                 raise ValueError(f"Unsupported storage protocol: {result.group('protocol')}")
@@ -389,8 +402,9 @@ def write_to_icechunk(
             except Exception:  # noqa: BLE001
                 dataset_exists = False
 
-            ds_to_write = ds
+            ds_to_write = ds.sortby(append_dim)
             skip_write = False
+            needs_sort = False
 
             if deduplicate and dataset_exists and existing_ds is not None:
                 existing_times = existing_ds[append_dim].values.astype("datetime64[ns]")
@@ -401,6 +415,12 @@ def write_to_icechunk(
                     skip_write = True
                 else:
                     ds_to_write = ds.isel({append_dim: is_new}).sortby(append_dim)
+                    if existing_times.size > 0 and (
+                        ds_to_write[append_dim].values.astype("datetime64[ns]")[0]
+                        < existing_times.max()
+                        or not bool(np.all(existing_times[:-1] < existing_times[1:]))
+                    ):
+                        needs_sort = True
 
             current_key = (int(ds_to_write.sizes[append_dim]), skip_write)
             if cached_key != current_key:
@@ -416,6 +436,32 @@ def write_to_icechunk(
                         append_dim=append_dim,
                         write_empty_chunks=False,
                     )
+                    if needs_sort:
+                        append_arr = zarr.open_array(session.store, path=append_dim, mode="a")
+                        raw_times = np.asarray(append_arr[:])
+                        order = np.argsort(raw_times, kind="stable")
+                        inv = np.argsort(order)
+                        if schema._chunks[append_dim] == 1 and schema._shards[append_dim] == 1:
+                            def _remap(idx: Iterable[int], table: np.ndarray) -> list[int]:
+                                first, *rest = idx
+                                return [int(table[first]), *rest]
+
+                            for var in obj_to_write.data_vars:
+                                session.reindex_array(
+                                    f"/{var}",
+                                    forward=lambda idx, inv=inv: _remap(idx, inv),
+                                    backward=lambda idx, order=order: _remap(idx, order),
+                                )
+                        else:
+                            for var in obj_to_write.data_vars:
+                                var_arr = zarr.open_array(session.store, path=str(var), mode="a")
+                                var_arr[:] = np.asarray(var_arr[:])[order]
+                        for coord_name, coord_da in obj_to_write.coords.items():
+                            if append_dim in coord_da.dims:
+                                c_arr = zarr.open_array(
+                                    session.store, path=str(coord_name), mode="a"
+                                )
+                                c_arr[:] = np.asarray(c_arr[:])[order]
                 else:
                     obj_to_write.to_zarr(
                         session.store,

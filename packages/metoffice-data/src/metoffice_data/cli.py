@@ -23,6 +23,7 @@ from .schema import (
 
 def _make_fetcher(
     order_id: str,
+    min_files: int,
     process_fn: Callable[[Path | str], xr.Dataset],
 ) -> Callable[[dt.datetime], xr.Dataset]:
     def _fetch(init_time: dt.datetime) -> xr.Dataset:
@@ -38,30 +39,33 @@ def _make_fetcher(
                 order_id=order_id,
                 init_time=init_time,
                 out_path=grib_path,
+                min_files=min_files,
             )
             if num_files == 0:
                 raise RuntimeError(
-                    f"No MetOffice files available for order '{order_id}' at {init_time.isoformat()}."
+                    f"MetOffice order '{order_id}' is missing or incomplete "
+                    f"(< {min_files} files) at {init_time.isoformat()}."
                 )
             return process_fn(grib_path)
 
     return _fetch
 
 
+# shortcut: min_files checks params * steps; bump to (steps + 1) if an order adds T+0 separately
 PRODUCTS: dict[str, ProductSpec] = {
     "global_west_europe": ProductSpec(
         schema=MetOfficeGlobalWesteuropeSchema,
-        fetch=_make_fetcher("westeurope-12params-54steps", process_metoffice_westeurope),
+        fetch=_make_fetcher("westeurope-12params-54steps", 12 * 54, process_metoffice_westeurope),
         description="MetOffice Global West Europe order",
     ),
     "global_india": ProductSpec(
         schema=MetOfficeGlobalIndiaSchema,
-        fetch=_make_fetcher("india-11params-54steps", process_metoffice_india),
+        fetch=_make_fetcher("india-11params-54steps", 11 * 54, process_metoffice_india),
         description="MetOffice Global India order",
     ),
     "ukv_uk": ProductSpec(
         schema=MetOfficeUkvSchema,
-        fetch=_make_fetcher("uk-12params-42steps", process_metoffice_ukv),
+        fetch=_make_fetcher("uk-12params-42steps", 12 * 42, process_metoffice_ukv),
         description="MetOffice UKV UK order",
     ),
 }

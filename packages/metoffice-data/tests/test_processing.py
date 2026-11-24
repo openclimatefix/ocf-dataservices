@@ -3,10 +3,13 @@ from unittest.mock import patch
 
 import numpy as np
 import xarray as xr
+from metoffice_data.client import DatahubClient
+from metoffice_data.download import download_order_partition
 from metoffice_data.processing import (
     _UKV_X_LAEA,
     _UKV_Y_LAEA,
     _assign_ukv_coords,
+    _read_raw_grib,
     _transform,
     process_metoffice_india,
 )
@@ -99,6 +102,88 @@ class TestProcessing(unittest.TestCase):
         self.assertNotIn("wind_direction_10m", out.data_vars)
         np.testing.assert_allclose(out["wind_u_10m"].values, 10.0, atol=1e-5)
         np.testing.assert_allclose(out["wind_v_10m"].values, 0.0, atol=1e-5)
+
+    def test_read_raw_grib_keeps_tcc_and_rejects_mismatched_steps(self):
+        import tempfile
+
+        import eccodes
+
+        with tempfile.NamedTemporaryFile(suffix=".grib2") as f:
+            gid_rh = eccodes.codes_grib_new_from_samples("regular_ll_sfc_grib2")
+            eccodes.codes_set(gid_rh, "discipline", 0)
+            eccodes.codes_set(gid_rh, "parameterCategory", 1)
+            eccodes.codes_set(gid_rh, "parameterNumber", 1)
+            eccodes.codes_set(gid_rh, "typeOfFirstFixedSurface", 103)
+            eccodes.codes_set(gid_rh, "scaledValueOfFirstFixedSurface", 2)
+            eccodes.codes_set(gid_rh, "scaleFactorOfFirstFixedSurface", 0)
+            eccodes.codes_write(gid_rh, f)
+            eccodes.codes_release(gid_rh)
+
+            gid_tcc = eccodes.codes_grib_new_from_samples("regular_ll_sfc_grib2")
+            eccodes.codes_set(gid_tcc, "centre", 74)
+            eccodes.codes_set(gid_tcc, "discipline", 0)
+            eccodes.codes_set(gid_tcc, "parameterCategory", 6)
+            eccodes.codes_set(gid_tcc, "parameterNumber", 1)
+            eccodes.codes_set(gid_tcc, "typeOfFirstFixedSurface", 1)
+            eccodes.codes_write(gid_tcc, f)
+            eccodes.codes_release(gid_tcc)
+            f.flush()
+
+            ds = _read_raw_grib(f.name)
+            self.assertIn("tcc", ds.data_vars)
+            self.assertTrue({"r", "r2"} & set(ds.data_vars))
+
+        # Add a second step only for rh so step coordinates disagree -> join='exact' rejects
+        with tempfile.NamedTemporaryFile(suffix=".grib2") as f_bad:
+            for step_hr in (0, 1):
+                gid_rh = eccodes.codes_grib_new_from_samples("regular_ll_sfc_grib2")
+                eccodes.codes_set(gid_rh, "discipline", 0)
+                eccodes.codes_set(gid_rh, "parameterCategory", 1)
+                eccodes.codes_set(gid_rh, "parameterNumber", 1)
+                eccodes.codes_set(gid_rh, "stepRange", str(step_hr))
+                eccodes.codes_write(gid_rh, f_bad)
+                eccodes.codes_release(gid_rh)
+
+            gid_tcc = eccodes.codes_grib_new_from_samples("regular_ll_sfc_grib2")
+            eccodes.codes_set(gid_tcc, "centre", 74)
+            eccodes.codes_set(gid_tcc, "discipline", 0)
+            eccodes.codes_set(gid_tcc, "parameterCategory", 6)
+            eccodes.codes_set(gid_tcc, "parameterNumber", 1)
+            eccodes.codes_set(gid_tcc, "stepRange", "0")
+            eccodes.codes_write(gid_tcc, f_bad)
+            eccodes.codes_release(gid_tcc)
+            f_bad.flush()
+
+            with self.assertRaises(ValueError):
+                _read_raw_grib(f_bad.name)
+
+    def test_download_order_partition_skips_incomplete_and_keeps_percent_wisp(self):
+        import datetime as dt
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import MagicMock
+
+        client = MagicMock(spec=DatahubClient)
+        client.list_file_ids.return_value = ["f1", "f2"]
+        with tempfile.TemporaryDirectory() as tmp:
+            count = download_order_partition(
+                client=client,
+                order_id="india-11params-54steps",
+                init_time=dt.datetime(2024, 1, 1, 0, 0, tzinfo=dt.UTC),
+                out_path=Path(tmp) / "partial.grib",
+                min_files=11 * 54,
+            )
+            self.assertEqual(count, 0)
+            client.download_file.assert_not_called()
+
+        raw = _global_raw()
+        raw["hcc"] = xr.DataArray(
+            np.full((2, 2, 2), 0.8, dtype=np.float32),
+            dims=("step", "latitude", "longitude"),
+            attrs={"GRIB_units": "%"},
+        )
+        out = _transform(raw, dims=MetOfficeGlobalIndiaSchema.dims())
+        np.testing.assert_allclose(out["high_cloud_cover"].values, 0.8, atol=1e-5)
 
 
 if __name__ == "__main__":

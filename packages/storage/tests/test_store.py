@@ -257,6 +257,73 @@ class TestStorageAndCli(unittest.TestCase):
                 rtol=1e-6,
             )
 
+    def test_out_of_order_init_time_sorted_and_sliceable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store_path = f"{tmp}/out_of_order_store"
+            t_late = dt.datetime(2026, 4, 8, 6, 0, tzinfo=dt.UTC)
+            t_early = dt.datetime(2026, 4, 8, 0, 0, tzinfo=dt.UTC)
+
+            ds_late = _make_ds(t_late, 20.0).assign_coords(
+                ingested_at=("init_time", np.array(["2026-04-08T07:00"], dtype="datetime64[ns]"))
+            )
+            ds_early = _make_ds(t_early, 10.0).assign_coords(
+                ingested_at=("init_time", np.array(["2026-04-08T01:00"], dtype="datetime64[ns]"))
+            )
+
+            write_to_icechunk(ds_late, _TestSchema, store_path, keep_mantissa_bits=None)
+            write_to_icechunk(ds_early, _TestSchema, store_path, keep_mantissa_bits=None)
+
+            repo, _ = open_icechunk_repo(store_path)
+            ro = xr.open_zarr(repo.readonly_session(branch="main").store, consolidated=False)
+            np.testing.assert_array_equal(
+                ro.init_time.values,
+                np.array(["2026-04-08T00:00", "2026-04-08T06:00"], dtype="datetime64[ns]"),
+            )
+            np.testing.assert_allclose(ro.temperature_2m.values[:, 0, 0, 0], [10.0, 20.0])
+            np.testing.assert_array_equal(
+                ro.ingested_at.values,
+                np.array(["2026-04-08T01:00", "2026-04-08T07:00"], dtype="datetime64[ns]"),
+            )
+            sliced = ro.sel(init_time=slice("2026-04-08T00:00", "2026-04-08T06:00"))
+            self.assertEqual(sliced.sizes["init_time"], 2)
+
+    def test_s3_storage_with_default_empty_cred_args_uses_env(self) -> None:
+        import boto3
+        from moto.server import ThreadedMotoServer
+
+        server = ThreadedMotoServer(port=0, verbose=False)
+        server.start()
+        try:
+            host, port = server.get_host_and_port()
+            endpoint = f"http://{host}:{port}"
+            s3 = boto3.client(
+                "s3",
+                endpoint_url=endpoint,
+                aws_access_key_id="testing",
+                aws_secret_access_key="testing",
+                region_name="us-east-1",
+            )
+            s3.create_bucket(Bucket="nwp-test-bucket")
+            store_uri = "s3://nwp-test-bucket/l1/test_asset"
+            t0 = dt.datetime(2026, 4, 8, 0, 0, tzinfo=dt.UTC)
+
+            with patch.dict(
+                os.environ,
+                {
+                    "AWS_ACCESS_KEY_ID": "testing",
+                    "AWS_SECRET_ACCESS_KEY": "testing",
+                    "AWS_REGION": "us-east-1",
+                    "AWS_ENDPOINT_URL": endpoint,
+                },
+                clear=False,
+            ):
+                self.assertFalse(has_partition(store_uri, "init_time", t0))
+                res = write_to_icechunk(_make_ds(t0), _TestSchema, store_uri)
+                self.assertFalse(res.skip_write)
+                self.assertTrue(has_partition(store_uri, "init_time", t0))
+        finally:
+            server.stop()
+
 
 if __name__ == "__main__":
     unittest.main()

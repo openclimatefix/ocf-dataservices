@@ -6,6 +6,7 @@ import numpy as np
 import xarray as xr
 from schemas.dim_order import enforce_dim_order
 from schemas.nwp_coordinates import extract_grib_attr, utc_now_coord
+from schemas.nwp_variables import scale_to_percent
 from schemas.validation import validates
 
 from .schema import (
@@ -63,23 +64,23 @@ def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:
     }
     for param_num, target_name in parameter_number_names.items():
         try:
-            ds_param = xr.open_dataset(
+            ds_params = cfgrib.open_datasets(
                 grib_path,
-                engine="cfgrib",
                 backend_kwargs={
                     "indexpath": "",
                     "read_keys": read_keys,
-                    "filter_by_keys": {"parameterNumber": param_num},
+                    "filter_by_keys": {"shortName": "unknown", "parameterNumber": param_num},
                 },
             )
-            if "unknown" in ds_param.data_vars:
-                ds_param = ds_param.rename({"unknown": target_name})
-                cleaned.append(
-                    ds_param.drop_vars(
+            for ds_param in ds_params:
+                if "unknown" in ds_param.data_vars:
+                    ds_clean = ds_param.rename({"unknown": target_name}).drop_vars(
                         ["number", "surface", "heightAboveGround", "atmosphere", "meanSea"],
                         errors="ignore",
                     )
-                )
+                    if "step" in ds_clean.coords and "step" not in ds_clean.dims:
+                        ds_clean = ds_clean.expand_dims("step")
+                    cleaned.append(ds_clean)
         except Exception:  # noqa: S110, BLE001
             pass  # Variable not present in this file
 
@@ -98,17 +99,18 @@ def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:
             ds = ds.drop_vars("unknown")
 
         if len(ds.data_vars) > 0:
-            cleaned.append(
-                ds.drop_vars(
-                    ["number", "surface", "heightAboveGround", "atmosphere", "meanSea"],
-                    errors="ignore",
-                )
+            ds_clean = ds.drop_vars(
+                ["number", "surface", "heightAboveGround", "atmosphere", "meanSea"],
+                errors="ignore",
             )
+            if "step" in ds_clean.coords and "step" not in ds_clean.dims:
+                ds_clean = ds_clean.expand_dims("step")
+            cleaned.append(ds_clean)
 
     if not cleaned:
         raise ValueError(f"No valid datasets found in {grib_path}")
 
-    return xr.merge(cleaned, compat="override", combine_attrs="override")
+    return xr.merge(cleaned, join="exact", compat="override", combine_attrs="override")
 
 
 def _transform(ds: xr.Dataset, dims: Sequence[str]) -> xr.Dataset:
@@ -172,9 +174,7 @@ def _transform(ds: xr.Dataset, dims: Sequence[str]) -> xr.Dataset:
         "low_cloud_cover",
     ):
         if cloud_var in ds.data_vars:
-            if float(ds[cloud_var].max()) <= 1.1:
-                ds[cloud_var] = ds[cloud_var] * 100.0
-            ds[cloud_var] = np.clip(ds[cloud_var], a_min=0.0, a_max=100.0)
+            ds[cloud_var] = scale_to_percent(ds[cloud_var])
 
     if "wind_speed_10m" in ds.data_vars and "wind_direction_10m" in ds.data_vars:
         if "wind_u_10m" not in ds.data_vars or "wind_v_10m" not in ds.data_vars:

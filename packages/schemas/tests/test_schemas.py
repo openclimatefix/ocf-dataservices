@@ -15,6 +15,7 @@ from schemas import (
     longitude,
     pressure_reduced_to_mean_sea_level,
     relative_humidity_2m,
+    scale_to_percent,
     step,
     temperature_2m,
     total_precipitation_rate,
@@ -123,53 +124,37 @@ class TestNwpDatasetSchema(unittest.TestCase):
         with self.assertRaises(SchemaError):
             _SampleSchema.validate(ds)
 
-    def test_cloud_cover_and_humidity_fraction_rejected(self):
-        # Pure 0-1 fraction
-        ds = _valid_dataset()
-        ds["high_cloud_cover"].values[:] = 0.75
+    def test_clear_sky_cloud_wisp_and_scale_to_percent(self):
+        # Clear sky with a 0.5% cloud wisp (0 < max <= 1.1) is valid
+        ds_wisp = _valid_dataset()
+        ds_wisp["high_cloud_cover"].values[:] = 0.0
+        ds_wisp["high_cloud_cover"].values[0, 0, 0, 0, 0] = 0.5
+        _SampleSchema.validate(ds_wisp)
+
+        # Out-of-range percentage (> 100) is rejected
+        ds_over = _valid_dataset()
+        ds_over["high_cloud_cover"].values[:] = 105.0
         with self.assertRaises(SchemaError):
-            _SampleSchema.validate(ds)
+            _SampleSchema.validate(ds_over)
 
-        # GRIB simple-packing overshoot slightly above 1.0 on a [0, 1] field
-        ds_overshoot = _valid_dataset()
-        ds_overshoot["high_cloud_cover"].values[:] = 1.001
-        with self.assertRaises(SchemaError):
-            _SampleSchema.validate(ds_overshoot)
+        # GRIB unit metadata prevents scaling an already-percent field with max <= 1.1
+        da_pct = xr.DataArray([0.0, 0.8], attrs={"GRIB_units": "%"})
+        np.testing.assert_allclose(scale_to_percent(da_pct).values, [0.0, 0.8])
+        da_frac = xr.DataArray([0.0, 0.008], attrs={"GRIB_units": "(0 - 1)"})
+        np.testing.assert_allclose(scale_to_percent(da_frac).values, [0.0, 0.8])
 
-        # Relative humidity as fraction
-        ds_rh = _valid_dataset()
-        ds_rh["relative_humidity_2m"].values[:] = 0.85
-        with self.assertRaises(SchemaError):
-            _SampleSchema.validate(ds_rh)
+    def test_late_arriving_rain_and_radiation_bounds(self):
+        # Dry forecast where rain begins on the final step passes validation
+        ds_rain = _valid_dataset()
+        ds_rain["total_precipitation_rate"].values[:] = 0.0
+        ds_rain["total_precipitation_rate"].values[0, -1, 0, 0, 0] = 0.0005
+        _SampleSchema.validate(ds_rain)
 
-        # All-zero cloud cover is valid
-        ds_zero = _valid_dataset()
-        ds_zero["high_cloud_cover"].values[:] = 0.0
-        _SampleSchema.validate(ds_zero)
-
-    def test_cumulative_radiation_and_precipitation_rejected(self):
-        # Monotonically accumulating radiation across steps
+        # Unconverted cumulative radiation in J m-2 (> 2000 W m-2) is rejected
         ds_rad = _valid_dataset()
-        ds_rad["downward_short_wave_radiation_flux_surface"].values[:, 0, ...] = 0.0
-        ds_rad["downward_short_wave_radiation_flux_surface"].values[:, 1, ...] = 100.0
-        ds_rad["downward_short_wave_radiation_flux_surface"].values[:, 2, ...] = 350.0
+        ds_rad["downward_short_wave_radiation_flux_surface"].values[:] = 360000.0
         with self.assertRaises(SchemaError):
             _SampleSchema.validate(ds_rad)
-
-        # Monotonically accumulating precipitation across steps
-        ds_precip = _valid_dataset()
-        ds_precip["total_precipitation_rate"].values[:, 0, ...] = 0.0
-        ds_precip["total_precipitation_rate"].values[:, 1, ...] = 0.01
-        ds_precip["total_precipitation_rate"].values[:, 2, ...] = 0.03
-        with self.assertRaises(SchemaError):
-            _SampleSchema.validate(ds_precip)
-
-        # Fluctuating (instantaneous) radiation passes
-        ds_inst = _valid_dataset()
-        ds_inst["downward_short_wave_radiation_flux_surface"].values[:, 0, ...] = 50.0
-        ds_inst["downward_short_wave_radiation_flux_surface"].values[:, 1, ...] = 250.0
-        ds_inst["downward_short_wave_radiation_flux_surface"].values[:, 2, ...] = 100.0
-        _SampleSchema.validate(ds_inst)
 
     def test_wrong_encoding_dtypes_rejected(self):
         ds_f64 = _valid_dataset()

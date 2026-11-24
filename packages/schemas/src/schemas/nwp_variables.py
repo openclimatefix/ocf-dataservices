@@ -1,6 +1,20 @@
 from typing import Any
 
 import pandera.xarray as pa
+import xarray as xr
+
+
+def scale_to_percent(da: xr.DataArray, max_val: float = 100.0) -> xr.DataArray:
+    """Scale `[0, 1]` fraction fields to `[0, 100]` percent using GRIB unit metadata."""
+    units = str(da.attrs.get("GRIB_units") or da.attrs.get("units") or "").strip()
+    if units in ("(0 - 1)", "1"):
+        scaled = da * 100.0
+    elif units == "%":
+        scaled = da
+    else:
+        # Fallback when GRIB unit metadata is absent or 'unknown' (e.g. local GRIB2 codes)
+        scaled = da * 100.0 if float(da.max()) <= 1.1 else da
+    return scaled.clip(min=0.0, max=max_val)
 
 
 def temperature_2m(dims: tuple[str, ...], nullable: bool = False) -> Any:
