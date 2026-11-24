@@ -157,7 +157,7 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
         append_dim: str,
         partition_key: str,
     ) -> xr.Dataset | None:
-        """Gets a partition if it already exists, otherwise returns None."""
+        """Return the dataset slice for `partition_key` if it exists in the store, else `None`."""
         store_path = self._get_store_path(asset_key)
         return store_existing_partition(
             store_path=store_path,

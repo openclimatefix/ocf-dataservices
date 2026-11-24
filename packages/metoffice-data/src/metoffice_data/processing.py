@@ -39,12 +39,10 @@ def _assign_ukv_coords(ds: xr.Dataset) -> xr.Dataset:
 
 
 def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:
-    """Read a concatenated MetOffice DataHub GRIB file into one Xarray Dataset.
+    """Read a concatenated MetOffice DataHub GRIB file into an `xarray.Dataset`.
 
-    For some reason, wind and cloud parameters all are read with shortName='unknown' by cfgrib,
-    which causes them to overwrite each other if read together. This function extracts them
-    separately using filter_by_keys on their parameterNumber, before reading the remaining
-    variables and merging everything.
+    Extracts parameters with `shortName='unknown'` individually by GRIB2 `parameterNumber` before
+    reading and merging the remaining variables.
     """
     read_keys = [
         "generatingProcessIdentifier",
@@ -211,10 +209,10 @@ def _transform(ds: xr.Dataset, dims: Sequence[str]) -> xr.Dataset:
 
 
 def process_metoffice(grib_path: Path | str, dims: Sequence[str]) -> xr.Dataset:
-    """Read and transform a MetOffice DataHub GRIB file, without validation.
+    """Read and transform a MetOffice DataHub GRIB file without schema validation.
 
-    Callers should use one of the validated entrypoints (`process_metoffice_westeurope`,
-    `process_metoffice_india`, `process_metoffice_ukv`), which wrap this and validate the result.
+    Use :func:`process_metoffice_westeurope`, :func:`process_metoffice_india`, or
+    :func:`process_metoffice_ukv` to validate the returned dataset.
     """
     return _transform(_read_raw_grib(grib_path), dims=dims)
 

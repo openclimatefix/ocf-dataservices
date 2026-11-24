@@ -10,15 +10,13 @@ def enforce_dim_order(
 ) -> xr.Dataset:
     """Rebuild `ds` with an explicit dimension order.
 
-    xarray's dimension insertion order for coordinates/data_vars is otherwise implicit and can
-    silently drift from what downstream IOManagers (e.g. zarr chunk/shard specs, which are keyed
-    positionally by dimension order) expect.
+    Enforces a deterministic dimension order on coordinates and data variables so that downstream
+    positional Zarr chunk and shard specifications match the dataset dimensions.
 
     Args:
-        ds: The dataset to reorder.
-        dims: The dimension order to enforce, e.g. as declared by a schema's `dims()`.
-        keep_vars: If given, restrict the output to these data variables (in this order, filtered
-            to those actually present).
+        ds: Input dataset to reorder.
+        dims: Target dimension order, as declared by a schema's `dims()` method.
+        keep_vars: Optional list of data variable names to retain in the returned dataset.
     """
     new_coords: dict[str, xr.Variable] = {d: ds.coords[d].variable for d in dims if d in ds.coords}
     for c in ds.coords:

@@ -8,11 +8,10 @@ from dagster._serdes.config_class import ConfigurableClassData
 
 
 class DotEnvSecretsLoader(SecretsLoader, ConfigurableClass):
-    """Loads env vars from ``{base_dir}/.env`` into launched run containers.
+    """Load environment variables from `{base_dir}/.env` into launched Dagster run containers.
 
-    Workaround for a bug in dagster's built-in ``EnvFileLoader`` (as of 1.13.17), which
-    double-joins the ``.env`` suffix onto ``base_dir`` and ends up looking for
-    ``{base_dir}/.env/.env``, silently returning no secrets.
+    Replaces Dagster's built-in `EnvFileLoader`, which appends a duplicate `.env` path segment onto
+    `base_dir` (`{base_dir}/.env/.env`) and returns an empty dictionary.
     """
 
     def __init__(self, inst_data: ConfigurableClassData | None = None, base_dir: str | None = None):

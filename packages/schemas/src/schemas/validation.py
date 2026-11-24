@@ -35,12 +35,10 @@ def _describe_null_variables(
     schema: type[pa.DatasetModel],
     exc: Exception,
 ) -> str | None:
-    """Build a human-readable summary of variables that failed validation due to nulls, or None.
+    """Return a summary of non-nullable variables that contain null values, or `None`.
 
-    Pandera doesn't always surface the exact failing variable/value in its top-level exception, so
-    on validation failure we check each variable ourselves to give a clearer error message. Only
-    variables where nulls are disallowed (or when the failure itself is a null check) are reported,
-    so allowed NaNs in `nullable=True` fields do not mask unrelated schema errors.
+    Inspects each variable in `ds` when schema validation fails to report the exact variable names
+    and null counts.
     """
     schema_vars = schema.to_schema().data_vars or {}
     is_null_error = "null" in str(exc).lower()
@@ -67,11 +65,10 @@ def _describe_null_variables(
 def validates(
     schema: type[pa.DatasetModel],
 ) -> Callable[[Callable[P, xr.Dataset]], Callable[P, xr.Dataset]]:
-    """Decorator that validates a function's returned Dataset against `schema` before returning it.
+    """Validate a function's returned `xarray.Dataset` against `schema`.
 
-    Applying this at a provider package's public entrypoint (its download/convert/process function)
-    guarantees every caller receives data that has passed schema validation, rather than relying on
-    the caller to remember to invoke `Schema.validate()` themselves.
+    Apply this decorator to the public entrypoint of each provider package to guarantee that all
+    returned datasets satisfy the target schema.
     """
 
     def decorator(func: Callable[P, xr.Dataset]) -> Callable[P, xr.Dataset]:

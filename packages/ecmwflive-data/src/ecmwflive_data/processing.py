@@ -225,12 +225,9 @@ def process_ecmwf_live(
     bbox_nwse: list[float],
     max_step_hours: int,
 ) -> xr.Dataset:
-    """
-    Process raw ECMWF Live GRIB data into an Xarray Dataset.
+    """Process raw ECMWF live GRIB data into an unvalidated `xarray.Dataset`.
 
-    This is region-agnostic and does not validate its output; callers should use
-    :func:`process_ecmwf_live_validated`, which wraps this function and validates the result
-    against :class:`EcmwfLiveSchema`.
+    Use :func:`process_ecmwf_live_validated` to validate the output against :class:`EcmwfLiveSchema`.
     """
     ds = _read_raw_grib(grib_path, bbox_nwse=bbox_nwse)
     return _transform(ds, bbox_nwse=bbox_nwse, max_step_hours=max_step_hours)

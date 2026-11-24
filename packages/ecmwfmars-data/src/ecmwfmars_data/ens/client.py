@@ -1,6 +1,4 @@
-"""
-ECMWF MARS API Client, adapted from the original.
-"""
+"""ECMWF MARS API client."""
 
 import dataclasses
 import datetime as dt
@@ -127,7 +125,7 @@ class MarsRequest:
 
 
 class Ignore303(urllib.request.HTTPRedirectHandler):
-    """Handler to automatically follow 301 and 302 redirects but ignore 303."""
+    """HTTP redirect handler that follows 301 and 302 redirects and returns 303 responses directly."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         if code in (301, 302):
@@ -161,9 +159,10 @@ class MarsClient:
     def _call(
         self, method: str, url: str, payload: dict[str, Any] | None = None
     ) -> tuple[int, dict[str, Any], str | None, int]:
-        """
-        Executes an HTTP request with exponential backoff on server errors.
-        Returns: (HTTP status code, JSON response dictionary, Location header, Retry-After value)
+        """Execute an HTTP request with retry on transient server or network errors.
+
+        Returns:
+            Tuple of `(http_status_code, json_response_dict, location_header, retry_after_seconds)`.
         """
         max_tries = 10
         delay = 60
@@ -238,9 +237,7 @@ class MarsClient:
         return code, response_json, location, retry_after
 
     def submit(self, request: dict[str, Any] | MarsRequest) -> str:
-        """
-        Submits a MARS request and returns the poll URL.
-        """
+        """Submit a MARS request and return the polling URL."""
         if isinstance(request, MarsRequest):
             request = request.to_dict()
 
@@ -252,10 +249,7 @@ class MarsClient:
         return endpoint
 
     def status(self, poll_url: str) -> tuple[str, dict[str, Any]]:
-        """
-        Checks the status of a MARS request.
-        Returns a tuple of (status_string, full_response_dict).
-        """
+        """Check the status of a MARS request and return `(status_string, response_dict)`."""
         _code, response, _new_location, _ = self._call("GET", poll_url)
         # Handle 303 Redirect representing completion
         if _code == 303:
@@ -265,31 +259,26 @@ class MarsClient:
         return status, response
 
     def cleanup(self, poll_url: str) -> None:
-        """
-        Deletes a request from MARS.
-        """
+        """Delete a completed or cancelled request from the MARS queue."""
         try:
             self._call("DELETE", poll_url)
         except APIException as e:
             logger.debug(f"Failed to cleanup request {poll_url}: {e}")
 
     def download_result(self, result_href: str, target: BinaryIO, expected_size: int = 0) -> None:
-        """
-        Downloads completed result from href to target.
-        """
+        """Download a completed MARS result from `result_href` to `target`."""
         download_url = urllib.parse.urljoin(self.url, result_href)
         self._download(download_url, target, expected_size)
 
     def execute(self, request: dict[str, Any] | MarsRequest, target: BinaryIO) -> dict[str, Any]:
-        """
-        Executes a MARS request and writes the downloaded data to `target`.
+        """Submit a MARS request, poll until completion, and write the downloaded data to `target`.
 
         Args:
-            request: A MarsRequest helper object or dictionary outlining the parameters for MARS.
-            target: A binary IO stream (like io.BytesIO() or an open file object).
+            request: `MarsRequest` instance or dictionary of MARS parameters.
+            target: Writable binary stream.
 
         Returns:
-            The final API response dictionary.
+            Final API response dictionary.
         """
         if isinstance(request, MarsRequest):
             request = request.to_dict()
@@ -344,9 +333,7 @@ class MarsClient:
         return response
 
     def _download(self, url: str, target: BinaryIO, expected_size: int) -> None:
-        """
-        Downloads data from `url` in 1MB chunks and writes to `target`.
-        """
+        """Download data from `url` in 1 MB chunks and write it to `target`."""
         req = urllib.request.Request(url)
         bytes_transferred = 0
 

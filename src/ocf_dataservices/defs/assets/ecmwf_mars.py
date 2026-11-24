@@ -155,7 +155,7 @@ def _poll_and_download_mars_l0(
 def l0_mars_ecmwf_ens_uk_v1(
     context: dg.AssetExecutionContext, mars_client: DagsterMarsClient
 ) -> dg.Output[Path]:
-    """Downloads raw ECMWF MARS ensemble GRIB data for a specific init time."""
+    """Download raw ECMWF MARS ensemble GRIB data for a partition."""
     metadata = context.assets_def.get_asset_spec().metadata
     req = MarsRequest.ens(
         params=_MARS_PARAMETERS,
@@ -189,7 +189,7 @@ def l0_mars_ecmwf_ens_uk_v1(
 def l1_mars_ecmwf_ens_uk_v1(
     context: dg.AssetExecutionContext, l0_mars_ecmwf_ens_uk_v1: Path
 ) -> dg.Output[xr.Dataset]:
-    """Converts raw ECMWF MARS ensemble GRIB data to an Xarray Dataset matching MarsEcmwfEnsSchema."""
+    """Convert raw ECMWF MARS ensemble GRIB data to a validated `xarray.Dataset`."""
     context.log.info(f"Converting MARS ENS GRIB data from {l0_mars_ecmwf_ens_uk_v1}")
     start_time = time.perf_counter()
     ds = convert_to_dataset(l0_mars_ecmwf_ens_uk_v1)
@@ -212,7 +212,7 @@ def l1_mars_ecmwf_ens_uk_v1(
 def l0_mars_ecmwf_hres_west_europe_v1(
     context: dg.AssetExecutionContext, mars_client: DagsterMarsClient
 ) -> dg.Output[Path]:
-    """Downloads raw ECMWF MARS HRES GRIB data for the West Europe region."""
+    """Download raw ECMWF MARS HRES GRIB data for the West Europe region."""
     metadata = context.assets_def.get_asset_spec().metadata
     req = MarsRequest.hres(
         params=HRES_MARS_PARAMETERS,
@@ -247,7 +247,7 @@ def l0_mars_ecmwf_hres_west_europe_v1(
 def l1_mars_ecmwf_hres_west_europe_v1(
     context: dg.AssetExecutionContext, l0_mars_ecmwf_hres_west_europe_v1: Path
 ) -> dg.Output[xr.Dataset]:
-    """Converts raw ECMWF MARS HRES GRIB data for West Europe to an Xarray Dataset matching MarsEcmwfHresSchema."""
+    """Convert raw ECMWF MARS HRES GRIB data for West Europe to a validated `xarray.Dataset`."""
     context.log.info(f"Converting MARS HRES GRIB data from {l0_mars_ecmwf_hres_west_europe_v1}")
     start_time = time.perf_counter()
     ds = convert_hres_to_dataset(l0_mars_ecmwf_hres_west_europe_v1)

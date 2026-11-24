@@ -12,12 +12,13 @@ def download_order_partition(
     init_time: dt.datetime,
     out_path: Path,
 ) -> int:
-    """Download all GRIB files for an order's init time, concatenated into a single local file.
+    """Download all GRIB files for an order initialization time into a single local file.
 
-    GRIB files are a sequence of self-describing messages, so appending the per-parameter files
-    into one file yields a valid multi-message GRIB that cfgrib can open in one pass.
+    Concatenates per-parameter GRIB files in sequence so `cfgrib` can open the multi-message file in
+    one pass.
 
-    Returns the number of files downloaded (0 if the init time isn't available yet).
+    Returns:
+        Number of files downloaded, or `0` if the initialization time is not yet available.
     """
     if is_valid_grib_file(out_path):
         return 1

@@ -13,21 +13,14 @@ class _NwpDatasetConfig(DatasetConfig):
 
 
 class NwpDatasetSchema(pa.DatasetModel):
-    """Shared base for NWP dataset schemas.
+    """Base Pandera schema for NWP `xarray.Dataset` objects.
 
-    All NWP datasets should have `_dims`, `_chunks`, and `_shards` declared. This base class
-    enforces that.
+    Subclasses must declare non-empty `_dims`, `_chunks`, and `_shards` class attributes with
+    identical dimension keys.
 
-    The schema should validate a dataset's shape (declared dims/coords present, in the declared
-    dtype), nullability, and physical unit bounds (e.g. a temperature field's plausible range).
-
-    However, note that the spatial fields are checked against global bounds (e.g. -90/90,
-    -180/180 in the case of lat/lon), NOT the given asset's bounding box. The spatial region is
-    it is a provider-package data-selection responsibility, applied by slicing the data before
-    schema validation runs (see e.g. `open_it`/`download` in `dynamical_data.ecmwf_ens.download`,
-    or the `bbox_nwse` handling in `ecmwflive_data.processing`). Passing schema validation confirms
-    the data is physically plausible and correctly shaped; it does not confirm the data covers the
-    region a particular asset expects.
+    This schema validates dataset dimension order, coordinate types, nullability, and physical unit
+    bounds. Spatial coordinates (`latitude`, `longitude`) are checked against global bounds only;
+    provider packages must slice data to the target regional bounding box before validation runs.
     """
 
     _dims: ClassVar[tuple[str, ...]] = ()
@@ -64,12 +57,12 @@ class NwpDatasetSchema(pa.DatasetModel):
 
     @dataframe_check
     def _dims_ordered_and_non_empty(cls, ds: xr.Dataset) -> bool:
-        """Dataset-level dimension order must match `_dims`, and no dimension may be empty."""
+        """Verify that the dataset dimension order matches `_dims` and no dimension is empty."""
         return tuple(ds.dims) == tuple(cls._dims) and all(ds.sizes[d] > 0 for d in cls._dims)
 
     @check("step", "init_time", "ensemble_member", regex=True)
     def _coord_strictly_increasing(cls, da: xr.DataArray) -> bool:
-        """Time and ensemble coordinates must be strictly increasing (sorted and unique)."""
+        """Verify that time and ensemble coordinates are strictly increasing."""
         if da.size <= 1:
             return True
         return bool(np.all(da.values[:-1] < da.values[1:]))
@@ -83,10 +76,7 @@ class NwpDatasetSchema(pa.DatasetModel):
         regex=True,
     )
     def _is_percent_not_fraction(cls, da: xr.DataArray) -> bool:
-        """Checks whether the max of the data array is greater than 1.1 or equal to 0.0.
-        If max is (0, 1.1] (allowing for GRIB simple-packing overshoot above 1.0), the data unit is
-        the unit interval [0, 1], not a percentage [0, 100].
-        """
+        """Verify that percentage fields are scaled to `[0, 100]` rather than `[0, 1]`."""
         if da.size == 0 or bool(da.isnull().all()):
             return False
         max_val = float(da.max())

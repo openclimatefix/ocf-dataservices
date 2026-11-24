@@ -13,25 +13,19 @@ from .schema import DynamicalEcmwfEnsSchema
 
 
 class NwpRunNotYetAvailable(Exception):
-    """Raised when ``nwp_init_time`` isn't in the catalog yet (Dynamical hasn't published it)."""
+    """Raised when `nwp_init_time` is not yet available in the upstream catalog."""
 
 
 def open_it(
     nwp_init_time: dt.datetime, bbox_nwse: tuple[float, float, float, float] = (90, 180, -90, -180)
 ) -> xr.Dataset:
-    """Lazily open the ECMWF ENS Icechunk store for a given init time.
+    """Open the ECMWF ENS Icechunk store lazily for a given initialization time and bounding box.
 
-    The returned dataset has not been validated against DynamicalEcmwfEnsSchema; call :func:`download`
-    on it to fetch and validate the data.
-
-    No data is downloaded: the returned dataset is still backed by lazy Dask/Zarr arrays.
-    Call :func:`download_ecmwf_ens_data` to actually fetch the data.
+    Call :func:`download` on the returned dataset to compute and validate the data.
 
     Args:
-        nwp_init_time: The initialization time to open. Must be timezone aware.
-        bbox_nwse: Optional bounding box to slice the dataset.
-            Format is (max_lat, max_lon, min_lat, min_lon).
-            If None, the entire dataset is returned.
+        nwp_init_time: Timezone-aware forecast initialization time.
+        bbox_nwse: Bounding box tuple `(north_lat, west_lon, south_lat, east_lon)` in degrees.
     """
     if nwp_init_time.utcoffset() is None:
         raise ValueError(f"nwp_init_time must be timezone aware. {nwp_init_time.tzinfo=}")
@@ -183,12 +177,10 @@ def _to_dataset(data_arrays: dict[str, xr.DataArray], ds_sliced: xr.Dataset) -> 
 
 @validates(DynamicalEcmwfEnsSchema)
 def download(ds_sliced: xr.Dataset) -> xr.Dataset:
-    """Download (compute) a lazily-opened, already-sliced ECMWF ENS dataset.
-
-    The returned dataset is validated against DynamicalEcmwfEnsSchema before being returned.
+    """Compute a lazily-opened ECMWF ENS dataset into memory and validate it.
 
     Args:
-        ds_sliced: A lazy dataset as returned by :func:`open_it`.
+        ds_sliced: Lazy dataset returned by :func:`open_it`.
     """
     data_arrays = _compute(ds_sliced)
     return _to_dataset(data_arrays, ds_sliced)
@@ -199,11 +191,7 @@ def _calc_slice_for_lat_or_lng(
     ds: xr.Dataset,
     bbox_nwse: tuple[float, float, float, float],
 ) -> slice:
-    """Robust slicing: xarray slice(a, b) is sensitive to coordinate direction.
-
-    We determine if latitude/longitude are ascending or descending. In ECMWF ENS on Dynamical,
-    latitude goes from +90 to -90, and longitude goes from -180 to +179.8.
-    """
+    """Return an ascending or descending coordinate slice matching the direction of `ds[coord_name]`."""
     min_coord, max_coord = (
         bbox_nwse[2] if coord_name == "latitude" else bbox_nwse[1],
         bbox_nwse[0] if coord_name == "latitude" else bbox_nwse[3],
