@@ -81,13 +81,22 @@ def _poll_and_download_mars_l0(
         context.log.warning(
             f"MARS queue full evaluated during status check: {e}. Deleting MARS job and retrying later."
         )
+        client.cleanup(poll_url)
         url_file_path.unlink(missing_ok=True)
         raise dg.RetryRequested(max_retries=1000, seconds_to_wait=random.randint(300, 600)) from e
-    except (APIException, urllib.error.URLError, ConnectionError) as e:
-        context.log.error(
-            f"Network or API error while checking status for {poll_url}: {e}. Resetting request."
+    except APIException as e:
+        if "HTTP Error 404" in str(e):
+            context.log.warning(f"MARS job {poll_url} expired (404). Resetting request.")
+            url_file_path.unlink(missing_ok=True)
+        else:
+            context.log.warning(
+                f"Transient API error checking {poll_url}: {e}. Keeping poll URL for retry."
+            )
+        raise dg.RetryRequested(max_retries=1000, seconds_to_wait=300) from e
+    except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
+        context.log.warning(
+            f"Transient network error checking {poll_url}: {e}. Keeping poll URL for retry."
         )
-        url_file_path.unlink(missing_ok=True)
         raise dg.RetryRequested(max_retries=1000, seconds_to_wait=300) from e
 
     context.log.info(f"MARS request status: {status}")

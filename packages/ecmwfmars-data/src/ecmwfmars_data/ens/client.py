@@ -220,7 +220,7 @@ class MarsClient:
             location = res.headers.get("Location")
             retry_after = int(res.headers.get("Retry-After", 5))
 
-        if code == 204:
+        if code == 204 or not body.strip():
             return code, {}, location, retry_after
 
         try:
@@ -244,15 +244,18 @@ class MarsClient:
         endpoint = urllib.parse.urljoin(self.url, "services/mars/requests")
         _code, _response, location, _ = self._call("POST", endpoint, request)
 
-        if location:
-            return urllib.parse.urljoin(endpoint, location)
-        return endpoint
+        if not location:
+            raise APIException("MARS POST succeeded without a Location header.")
+        return urllib.parse.urljoin(endpoint, location)
 
     def status(self, poll_url: str) -> tuple[str, dict[str, Any]]:
         """Check the status of a MARS request and return `(status_string, response_dict)`."""
-        _code, response, _new_location, _ = self._call("GET", poll_url)
+        code, response, new_location, _ = self._call("GET", poll_url)
         # Handle 303 Redirect representing completion
-        if _code == 303:
+        if code == 303:
+            if "href" not in response and "result" not in response and new_location:
+                next_url = urllib.parse.urljoin(poll_url, new_location)
+                _code2, response, _, _ = self._call("GET", next_url)
             return "complete", response
 
         status = response.get("status", "unknown")
@@ -262,7 +265,7 @@ class MarsClient:
         """Delete a completed or cancelled request from the MARS queue."""
         try:
             self._call("DELETE", poll_url)
-        except APIException as e:
+        except (APIException, urllib.error.URLError, ConnectionError) as e:
             logger.debug(f"Failed to cleanup request {poll_url}: {e}")
 
     def download_result(self, result_href: str, target: BinaryIO, expected_size: int = 0) -> None:
@@ -287,10 +290,9 @@ class MarsClient:
 
         code, response, location, retry_after = self._call("POST", endpoint, request)
 
-        if location:
-            poll_url = urllib.parse.urljoin(endpoint, location)
-        else:
-            poll_url = endpoint
+        if not location:
+            raise APIException("MARS POST succeeded without a Location header.")
+        poll_url = urllib.parse.urljoin(endpoint, location)
 
         try:
             status = "complete" if code == 303 else response.get("status")
@@ -305,13 +307,17 @@ class MarsClient:
 
                 code, response, new_location, retry_after = self._call("GET", poll_url)
 
-                if new_location:
+                if new_location and code != 303:
                     poll_url = urllib.parse.urljoin(poll_url, new_location)
 
                 status = "complete" if code == 303 else response.get("status", status)
 
+            if code == 303 and "href" not in response and "result" not in response and location:
+                res_loc = new_location if "new_location" in locals() and new_location else location
+                _c, response, _, _ = self._call("GET", urllib.parse.urljoin(poll_url, res_loc))
+
             # In cases of an HTTP 303, the response dictionary is the result
-            result_obj = response if code == 303 else response.get("result", {})
+            result_obj = response if "href" in response else response.get("result", {})
             result_href = result_obj.get("href")
 
             if not result_href:

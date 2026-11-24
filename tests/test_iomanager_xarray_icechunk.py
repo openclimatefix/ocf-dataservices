@@ -264,6 +264,68 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
             set((live_schema.data_vars or {}).keys()),
         )
 
+    def test_docker_compose_dagster_yaml_and_mars_poll_url_retention(self):
+        import os
+        from pathlib import Path
+        from unittest.mock import MagicMock, patch
+
+        import yaml
+        from dagster._core.instance.config import dagster_instance_config
+        from ecmwfmars_data.ens.client import APIException
+
+        from ocf_dataservices.defs.assets.ecmwf_mars import l0_mars_ecmwf_hres_west_europe_v1
+
+        repo_root = Path(__file__).resolve().parent.parent
+        compose = yaml.safe_load((repo_root / "docker-compose.yaml").read_text())
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "dagster.yaml").write_text(compose["configs"]["dagster.yaml"]["content"])
+            cfg, _ = dagster_instance_config(tmp)
+            self.assertEqual(cfg["concurrency"]["pools"]["granularity"], "op")
+            self.assertEqual(cfg["concurrency"]["pools"]["op_granularity_run_buffer"], 0)
+            self.assertLess(
+                cfg["concurrency"]["runs"]["tag_concurrency_limits"][0]["limit"],
+                cfg["concurrency"]["runs"]["max_concurrent_runs"],
+            )
+
+            l0_io = MagicMock()
+            l0_io.existing_partition.return_value = None
+            mars_res = MagicMock()
+            client = mars_res.get_client.return_value
+            url_file = (
+                Path(tmp)
+                / "nwp"
+                / "l0_mars_ecmwf_hres_west_europe_v1"
+                / "_mars_urls"
+                / "2024-04-01T0000.url"
+            )
+            url_file.parent.mkdir(parents=True, exist_ok=True)
+            url_file.write_text("https://api.ecmwf.int/v1/services/mars/requests/job-1")
+
+            with patch.dict(os.environ, {"L0_ROOT_PATH": tmp}, clear=False):
+                # Transient network error preserves the .url file so retry does not leak a job
+                client.status.side_effect = ConnectionError("reset")
+                with (
+                    dg.build_asset_context(
+                        partition_key="2024-04-01T00:00",
+                        resources={"l0_io_manager": l0_io, "mars_client": mars_res},
+                    ) as ctx1,
+                    self.assertRaises(dg.RetryRequested),
+                ):
+                    l0_mars_ecmwf_hres_west_europe_v1(ctx1)
+                self.assertTrue(url_file.exists())
+
+                # Expired 404 job resets the .url file cleanly
+                client.status.side_effect = APIException("HTTP Error 404: not found")
+                with (
+                    dg.build_asset_context(
+                        partition_key="2024-04-01T00:00",
+                        resources={"l0_io_manager": l0_io, "mars_client": mars_res},
+                    ) as ctx2,
+                    self.assertRaises(dg.RetryRequested),
+                ):
+                    l0_mars_ecmwf_hres_west_europe_v1(ctx2)
+                self.assertFalse(url_file.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

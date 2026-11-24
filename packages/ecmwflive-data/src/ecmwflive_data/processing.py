@@ -56,26 +56,39 @@ def _read_raw_grib(grib_path: Path | str, bbox_nwse: list[float]) -> xr.Dataset:
     if not valid_datasets:
         raise ValueError(f"No regular lat/lon grid datasets found in {grib_path}")
 
-    # Filter to only datasets that overlap with the target bounding box
+    # Wrap longitudes into [-180, 180), orient latitudes north-to-south, crop to bbox_nwse, and
+    # group by spatial grid so mixed global/regional or multi-resolution GRIB cubes align cleanly.
     n, w, s, e = bbox_nwse
-    overlapping = []
+    by_grid: dict[tuple[int, int, float, float], list[xr.Dataset]] = {}
     for d in valid_datasets:
-        lon = d.longitude
-        # Handle potential 0-360 wrap for the check
-        if float(lon.max()) > 180:
-            lon = ((lon + 180) % 360) - 180
+        if float(d.longitude.max()) > 180:
+            d = d.assign_coords(longitude=(((d.longitude + 180) % 360) - 180)).sortby("longitude")
+        if d.latitude.size > 1 and float(d.latitude[0]) < float(d.latitude[-1]):
+            d = d.sortby("latitude", ascending=False)
 
-        lat_min, lat_max = float(d.latitude.min()), float(d.latitude.max())
-        lon_min, lon_max = float(lon.min()), float(lon.max())
+        d_sub = d.sel(latitude=slice(n, s), longitude=slice(w, e))
+        if d_sub.sizes.get("latitude", 0) == 0 or d_sub.sizes.get("longitude", 0) == 0:
+            continue
 
-        # Check overlap (n=max_lat, s=min_lat, w=min_lon, e=max_lon)
-        if lat_min <= n and lat_max >= s and lon_min <= e and lon_max >= w:
-            overlapping.append(d)
+        grid_key = (
+            int(d_sub.sizes["latitude"]),
+            int(d_sub.sizes["longitude"]),
+            round(float(d_sub.latitude[0]), 4),
+            round(float(d_sub.longitude[0]), 4),
+        )
+        by_grid.setdefault(grid_key, []).append(d_sub)
 
-    if not overlapping:
+    if not by_grid:
         raise ValueError(f"No grid datasets overlap the target bbox {bbox_nwse} in {grib_path}")
 
-    ds = xr.merge(overlapping, compat="override")
+    best_group = max(
+        by_grid.values(),
+        key=lambda grp: (
+            grp[0].sizes["latitude"] * grp[0].sizes["longitude"],
+            sum(len(x.data_vars) for x in grp),
+        ),
+    )
+    ds = xr.merge(best_group, join="exact", compat="override", combine_attrs="override")
 
     # The schemas do not expect extra scalar coordinates that cfgrib automatically adds
     # (like 'number', 'level', etc.), but we strip them globally in _transform rather than here.

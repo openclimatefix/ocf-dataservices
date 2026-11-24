@@ -398,7 +398,7 @@ def write_to_icechunk(
             existing_ds = None
             try:
                 existing_ds = xr.open_zarr(session.store, consolidated=False)
-                dataset_exists = True
+                dataset_exists = bool(existing_ds.data_vars and append_dim in existing_ds.dims)
             except Exception:  # noqa: BLE001
                 dataset_exists = False
 
@@ -463,10 +463,11 @@ def write_to_icechunk(
                                 )
                                 c_arr[:] = np.asarray(c_arr[:])[order]
                 else:
+                    write_mode = "w" if not deduplicate else ("a" if existing_ds is not None else "w-")
                     obj_to_write.to_zarr(
                         session.store,
                         zarr_format=3,
-                        mode="w-",
+                        mode=write_mode,
                         write_empty_chunks=False,
                         encoding={
                             var: {

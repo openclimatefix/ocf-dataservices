@@ -95,10 +95,14 @@ def download_live_ecmwf_partition(
     if not files:
         return 0
 
-    with out_path.open("wb") as out_f:
-        for f in files:
-            with fs.open(f, "rb") as in_f:
-                out_f.write(in_f.read())
+    try:
+        with out_path.open("wb") as out_f:
+            for f in files:
+                with fs.open(f, "rb") as in_f:
+                    out_f.write(in_f.read())
+    except Exception:
+        out_path.unlink(missing_ok=True)
+        raise
 
     if not is_valid_grib_file(out_path):
         out_path.unlink(missing_ok=True)

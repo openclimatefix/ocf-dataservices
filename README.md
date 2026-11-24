@@ -81,7 +81,7 @@ docker run --rm --env-file .env \
   --store-path s3://my-example-bucket/ceda-ukv.icechunk
 ```
 
-Add `--write-stats` to compute and update the monthly `stats` Zarr group during standalone CLI runs.
+Pass `--no-write-stats` to skip computing and updating the monthly `stats` Zarr group during standalone CLI runs.
 
 ## Structure of a data module
 

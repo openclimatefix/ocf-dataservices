@@ -151,15 +151,17 @@ configs:
       run_coordinator:
         module: dagster.core.run_coordinator
         class: QueuedRunCoordinator
-        config:
-          max_concurrent_runs: 25
-          tag_concurrency_limits:
-            - key: "dagster/backfill"
-              limit: 25
 
       concurrency:
         pools:
           default_limit: 1
+          granularity: op
+          op_granularity_run_buffer: 0
+        runs:
+          max_concurrent_runs: 25
+          tag_concurrency_limits:
+            - key: "dagster/backfill"
+              limit: 15
 
       run_monitoring:
         enabled: true

@@ -100,8 +100,9 @@ def build_parser(package_name: str, products: Mapping[str, ProductSpec]) -> argp
     )
     parser.add_argument(
         "--write-stats",
-        action="store_true",
-        help="Also compute and write the monthly stats Zarr group (default: off).",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Compute and write the monthly stats Zarr group (default: on; --no-write-stats to skip).",
     )
     return parser
 

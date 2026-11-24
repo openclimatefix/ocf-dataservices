@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import xarray as xr
-from ecmwfmars_data.ens.client import MarsClient, MarsRequest
+from ecmwfmars_data.ens.client import APIException, MarsClient, MarsRequest
 from ecmwfmars_data.ens.download import convert_to_dataset, download_raw
 from ecmwfmars_data.hres.download import (
     HRES_MARS_PARAMETERS,
@@ -248,6 +248,47 @@ class TestDownload(unittest.TestCase):
             ds["downward_short_wave_radiation_flux_surface"].values, 1.0, atol=1e-4
         )
         self.assertEqual(list(ds.coords["generating_process_id"].values), [155])
+
+    def test_mars_client_handles_empty_202_and_303_redirect_and_missing_location(self):
+        import email.message
+        import io
+        import urllib.response
+
+        client = MarsClient(url="https://api.ecmwf.int/v1", key="k", email="e@example.com")
+
+        def make_resp(code: int, body: bytes, headers: dict[str, str]):
+            msg = email.message.Message()
+            for k, v in headers.items():
+                msg[k] = v
+            return urllib.response.addinfourl(io.BytesIO(body), msg, "https://api.ecmwf.int/v1", code)
+
+        # POST 202 with empty body + Location succeeds; missing Location raises APIException
+        with patch.object(
+            client.opener,
+            "open",
+            return_value=make_resp(202, b"", {"Location": "/v1/services/mars/requests/req-1"}),
+        ):
+            poll_url = client.submit({"class": "od"})
+        self.assertEqual(poll_url, "https://api.ecmwf.int/v1/services/mars/requests/req-1")
+
+        with (
+            patch.object(client.opener, "open", return_value=make_resp(202, b"", {})),
+            self.assertRaises(APIException),
+        ):
+            client.submit({"class": "od"})
+
+        # GET status 303 with empty body follows Location to fetch result JSON
+        with patch.object(
+            client.opener,
+            "open",
+            side_effect=[
+                make_resp(303, b"", {"Location": "/v1/services/mars/results/req-1"}),
+                make_resp(200, b'{"href": "https://dl.ecmwf.int/1.grib", "size": 123}', {}),
+            ],
+        ):
+            st, payload = client.status(poll_url)
+        self.assertEqual(st, "complete")
+        self.assertEqual(payload["href"], "https://dl.ecmwf.int/1.grib")
 
 
 if __name__ == "__main__":

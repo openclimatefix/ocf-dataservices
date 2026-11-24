@@ -119,11 +119,35 @@ class TestStorageAndCli(unittest.TestCase):
                     dt.datetime(2026, 4, 8, 6, 0, tzinfo=dt.UTC),
                 ],
             )
-            # Standalone CLI does not write stats by default
+            # Standalone CLI writes monthly stats by default without double-counting skipped runs
             repo, _ = open_icechunk_repo(store_path)
             session = repo.readonly_session(branch="main")
+            stats_ds = xr.open_zarr(session.store, group="stats", consolidated=False)
+            np.testing.assert_allclose(
+                stats_ds["temperature_2m"].sel(month="2026-04-01", stat="count").values,
+                np.full((2, 2), 4.0, dtype=np.float32),
+            )
+
+            # --no-write-stats opts out cleanly
+            no_stats_store = f"{tmp}/cli_no_stats_store"
+            run_cli(
+                "demo-data",
+                products,
+                argv=[
+                    "--store-path",
+                    no_stats_store,
+                    "--init-time",
+                    "2026-04-08T00:00",
+                    "--no-write-stats",
+                ],
+            )
+            repo_ns, _ = open_icechunk_repo(no_stats_store)
             with self.assertRaises((KeyError, ValueError, FileNotFoundError)):
-                xr.open_zarr(session.store, group="stats", consolidated=False)
+                xr.open_zarr(
+                    repo_ns.readonly_session(branch="main").store,
+                    group="stats",
+                    consolidated=False,
+                )
 
     def test_invalid_uri_and_bad_partition_key_raise(self) -> None:
         with self.assertRaises(ValueError):
@@ -323,6 +347,38 @@ class TestStorageAndCli(unittest.TestCase):
                 self.assertTrue(has_partition(store_uri, "init_time", t0))
         finally:
             server.stop()
+
+    def test_deduplicate_false_overwrites_cleanly_and_preexisting_subgroup_works(self) -> None:
+        import icechunk
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sp1 = f"{tmp}/dedup_false_store"
+            t0 = dt.datetime(2026, 4, 8, 0, 0, tzinfo=dt.UTC)
+            t1 = dt.datetime(2026, 4, 8, 6, 0, tzinfo=dt.UTC)
+            write_to_icechunk(_make_ds(t0, 10.0), _TestSchema, sp1, deduplicate=False)
+            write_to_icechunk(_make_ds(t1, 30.0), _TestSchema, sp1, deduplicate=False)
+
+            repo1, _ = open_icechunk_repo(sp1)
+            ro1 = repo1.readonly_session(branch="main")
+            root1 = xr.open_zarr(ro1.store, consolidated=False)
+            stats1 = xr.open_zarr(ro1.store, group="stats", consolidated=False)
+            np.testing.assert_array_equal(
+                root1.init_time.values, np.array(["2026-04-08T06:00"], dtype="datetime64[ns]")
+            )
+            np.testing.assert_allclose(
+                stats1["temperature_2m"].sel(month="2026-04-01", stat="count").values,
+                np.full((2, 2), 2.0, dtype=np.float32),
+            )
+
+            # Repo where a subgroup already exists before root dataset is first written
+            sp2 = f"{tmp}/subgroup_first_store"
+            repo2 = icechunk.Repository.create(icechunk.local_filesystem_storage(sp2))
+            s = repo2.writable_session("main")
+            _make_ds(t0, 5.0).to_zarr(s.store, group="aux", zarr_format=3, mode="w-")
+            s.commit("init aux")
+
+            write_to_icechunk(_make_ds(t0, 12.0), _TestSchema, sp2)
+            self.assertTrue(has_partition(sp2, "init_time", t0))
 
 
 if __name__ == "__main__":
