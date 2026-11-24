@@ -33,9 +33,6 @@ local_resources = {
     "l1_io_manager": XarrayIcechunkIOManager(
         path=dg.EnvVar("L1_ROOT_PATH"),
     ),
-    "l2_io_manager": XarrayIcechunkIOManager(
-        path=dg.EnvVar("L2_ROOT_PATH"),
-    ),
     "mars_client": DagsterMarsClient(
         url=dg.EnvVar("ECMWF_API_URL"),
         key=dg.EnvVar("ECMWF_API_KEY"),

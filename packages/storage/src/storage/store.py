@@ -15,7 +15,9 @@ import numpy as np
 import xarray as xr
 import zarr
 import zarr.codecs
+import zarr.errors
 from schemas.base import NwpDatasetSchema
+from xarray.coding.times import decode_cf_datetime
 
 SPATIAL_DIMS = ("latitude", "longitude", "y_laea", "x_laea", "y_osgb", "x_osgb")
 STATS = ("count", "mean", "std", "min", "max")
@@ -248,7 +250,7 @@ def open_icechunk_repo(
         except Exception as e:
             raise OSError(f"Failed to create repository at storage: {storage}. Error: {e}") from e
     else:
-        raise OSError(f"Repository does not exist at storage: {storage}")
+        raise FileNotFoundError(f"Repository does not exist at storage: {storage}")
     return repo, created
 
 
@@ -263,6 +265,49 @@ def _to_utc_datetime64(value: str | dt.datetime | np.datetime64) -> np.datetime6
     if parsed.tzinfo is not None:
         parsed = parsed.astimezone(dt.UTC).replace(tzinfo=None)
     return np.datetime64(parsed, "ns")
+
+
+def existing_partition_times(
+    store_path: str,
+    append_dim: str,
+    aws_access_key_id: str = "",
+    aws_secret_access_key: str = "",
+    aws_region_name: str = "",
+    aws_endpoint_url: str | None = None,
+) -> set[np.datetime64]:
+    """Return all existing `datetime64[ns]` values along `append_dim` in `store_path`."""
+    try:
+        repo, _ = open_icechunk_repo(
+            store_path,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+            aws_region_name=aws_region_name,
+            aws_endpoint_url=aws_endpoint_url,
+        )
+    except FileNotFoundError:
+        return set()
+
+    session = repo.readonly_session(branch="main")
+    try:
+        arr = zarr.open_array(session.store, path=append_dim, mode="r")
+    except (
+        FileNotFoundError,
+        KeyError,
+        zarr.errors.ArrayNotFoundError,
+        zarr.errors.GroupNotFoundError,
+    ):
+        return set()
+
+    raw = np.asarray(arr[:])
+    if np.issubdtype(raw.dtype, np.datetime64):
+        decoded = raw.astype("datetime64[ns]")
+    else:
+        decoded = decode_cf_datetime(
+            raw,
+            units=str(arr.attrs.get("units", "nanoseconds since 1970-01-01")),
+            calendar=str(arr.attrs.get("calendar", "proleptic_gregorian")),
+        ).astype("datetime64[ns]")
+    return set(decoded)
 
 
 def existing_partition(
@@ -284,17 +329,23 @@ def existing_partition(
             aws_region_name=aws_region_name,
             aws_endpoint_url=aws_endpoint_url,
         )
-    except OSError:
+    except FileNotFoundError:
         return None
 
+    session = repo.readonly_session(branch="main")
     try:
-        session = repo.readonly_session(branch="main")
         ds = xr.open_zarr(session.store, consolidated=False)
-        if append_dim in ds.dims and target_date in ds[append_dim].values.astype("datetime64[ns]"):
-            return ds.sel({append_dim: target_date})
+    except (
+        FileNotFoundError,
+        KeyError,
+        ValueError,
+        zarr.errors.GroupNotFoundError,
+    ):
         return None
-    except Exception:  # noqa: BLE001
-        return None
+
+    if append_dim in ds.dims and target_date in ds[append_dim].values.astype("datetime64[ns]"):
+        return ds.sel({append_dim: target_date})
+    return None
 
 
 def has_partition(
@@ -307,17 +358,14 @@ def has_partition(
     aws_endpoint_url: str | None = None,
 ) -> bool:
     """Return True if `partition_key` already exists along `append_dim` in `store_path`."""
-    return (
-        existing_partition(
-            store_path=store_path,
-            append_dim=append_dim,
-            partition_key=partition_key,
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-            aws_region_name=aws_region_name,
-            aws_endpoint_url=aws_endpoint_url,
-        )
-        is not None
+    target_date = _to_utc_datetime64(partition_key)
+    return target_date in existing_partition_times(
+        store_path=store_path,
+        append_dim=append_dim,
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+        aws_region_name=aws_region_name,
+        aws_endpoint_url=aws_endpoint_url,
     )
 
 

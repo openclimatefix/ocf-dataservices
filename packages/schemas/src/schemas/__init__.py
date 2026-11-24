@@ -1,5 +1,6 @@
 from .base import NwpDatasetSchema
 from .dim_order import enforce_dim_order
+from .ecmwf_hres import EcmwfHresSchema, transform_ecmwf_hres
 from .nwp_coordinates import (
     ensemble_member,
     extract_grib_attr,
@@ -40,10 +41,12 @@ from .nwp_variables import (
     wind_v_100m,
     wind_v_200m,
 )
+from .um_grib import normalize_um_variables, read_um_grib_datasets
 from .validation import MIN_GRIB_SIZE_BYTES, is_valid_grib_file, validates
 
 __all__ = [
     "MIN_GRIB_SIZE_BYTES",
+    "EcmwfHresSchema",
     "NwpDatasetSchema",
     "categorical_precipitation_type_surface",
     "direct_solar_radiation",
@@ -61,8 +64,10 @@ __all__ = [
     "longitude",
     "low_cloud_cover",
     "medium_cloud_cover",
+    "normalize_um_variables",
     "parse_expver_int16",
     "pressure_reduced_to_mean_sea_level",
+    "read_um_grib_datasets",
     "relative_humidity_2m",
     "scale_to_percent",
     "snow_depth",
@@ -70,6 +75,7 @@ __all__ = [
     "temperature_2m",
     "total_cloud_cover_atmosphere",
     "total_precipitation_rate",
+    "transform_ecmwf_hres",
     "utc_now_coord",
     "uv_b_radiation",
     "validates",

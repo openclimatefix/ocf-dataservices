@@ -73,7 +73,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # Shared storage for compute logs and system artifacts
       - dagster-local-vol:/opt/dagster/local
-      - dagster-local-vol:/opt/dagster/home/storage
     networks: ["dagster-network"]
     depends_on:
       dagster-postgres:
@@ -101,7 +100,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # Shared storage for compute logs and system artifacts
       - dagster-local-vol:/opt/dagster/local
-      - dagster-local-vol:/opt/dagster/home/storage
     networks: ["dagster-network"]
     depends_on:
       dagster-postgres:
@@ -202,7 +200,6 @@ configs:
               - /mnt/storage_c:/mnt/storage_c
               # System storage mounts (shared with webserver/daemon for compute logs)
               - dagster-local-vol:/opt/dagster/local
-              - dagster-local-vol:/opt/dagster/home/storage
 
       retention:
         schedule:

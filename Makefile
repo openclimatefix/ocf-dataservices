@@ -22,8 +22,6 @@ run_monitoring:
   free_slots_after_run_end_seconds: 300
 
 python_logs:
-  managed_python_loggers:
-    - nged_data
   python_log_level: DEBUG
 
 endef

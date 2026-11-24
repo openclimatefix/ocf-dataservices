@@ -1,5 +1,7 @@
+import concurrent.futures
 import datetime as dt
 import re
+from collections.abc import Sequence
 from pathlib import Path
 
 import s3fs
@@ -14,6 +16,7 @@ def get_completed_init_times(
     region_name: str,
     prefix: str,
     last_processed: dt.datetime,
+    files_out: list[str] | None = None,
 ) -> dict[dt.datetime, dt.datetime]:
     """Check S3 for complete initialization times for ECMWF live data."""
     fs = s3fs.S3FileSystem(
@@ -29,6 +32,9 @@ def get_completed_init_times(
         files = fs.ls(f"{bucket}/ecmwf")
     except Exception as e:
         raise RuntimeError(f"Failed to list S3 bucket: {e}") from e
+
+    if files_out is not None:
+        files_out.extend(files)
 
     pattern = re.compile(rf"^{prefix}[DS](\d{{8}})[D]?(\d{{8}})\d$")
     init_time_max_steps: dict[dt.datetime, dt.datetime] = {}
@@ -76,8 +82,10 @@ def download_live_ecmwf_partition(
     endpoint_url: str | None,
     region_name: str,
     prefix: str,
+    files: Sequence[str] | None = None,
+    max_workers: int = 8,
 ) -> int:
-    """Download raw ECMWF live data files into a single local file."""
+    """Download raw ECMWF live data files in parallel into a single local file."""
     if is_valid_grib_file(out_path):
         return 1
 
@@ -90,16 +98,23 @@ def download_live_ecmwf_partition(
         },
     )
     pattern = re.compile(rf"^{prefix}[DS]{partition_time.strftime('%m%d%H%M')}[D]?\d{{8}}\d$")
-    files = [f for f in fs.ls(f"{bucket}/ecmwf") if pattern.search(f.split("/")[-1])]
+    listing = files if files is not None else fs.ls(f"{bucket}/ecmwf")
+    matched = [f for f in listing if pattern.search(f.split("/")[-1])]
 
-    if not files:
+    if not matched:
         return 0
 
+    def _read_s3_bytes(path: str) -> bytes:
+        with fs.open(path, "rb") as in_f:
+            return in_f.read()
+
     try:
-        with out_path.open("wb") as out_f:
-            for f in files:
-                with fs.open(f, "rb") as in_f:
-                    out_f.write(in_f.read())
+        with (
+            out_path.open("wb") as out_f,
+            concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor,
+        ):
+            for payload in executor.map(_read_s3_bytes, matched):
+                out_f.write(payload)
     except Exception:
         out_path.unlink(missing_ok=True)
         raise
@@ -108,4 +123,4 @@ def download_live_ecmwf_partition(
         out_path.unlink(missing_ok=True)
         raise RuntimeError(f"Downloaded file {out_path} is not a valid GRIB file.")
 
-    return len(files)
+    return len(matched)

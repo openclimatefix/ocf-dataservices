@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import xarray as xr
 from schemas.base import NwpDatasetSchema
 
-from .store import has_partition, write_to_icechunk
+from .store import _to_utc_datetime64, existing_partition_times, write_to_icechunk
 
 logger = logging.getLogger(__name__)
 
@@ -133,17 +133,20 @@ def run_cli(
     aws_region_name = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "")
     aws_endpoint_url = os.getenv("AWS_ENDPOINT_URL")
 
+    append_dim = spec.schema.append_dim()
+    existing_times = existing_partition_times(
+        store_path=store_path,
+        append_dim=append_dim,
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+        aws_region_name=aws_region_name,
+        aws_endpoint_url=aws_endpoint_url,
+    )
+
     for init_time in init_times:
         iso_time = init_time.strftime("%Y-%m-%dT%H:%M")
-        if has_partition(
-            store_path=store_path,
-            append_dim=spec.schema.append_dim(),
-            partition_key=init_time,
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-            aws_region_name=aws_region_name,
-            aws_endpoint_url=aws_endpoint_url,
-        ):
+        target_ts = _to_utc_datetime64(init_time)
+        if target_ts in existing_times:
             logger.info(
                 "Partition %s already exists in %s; skipping.",
                 iso_time,
@@ -166,6 +169,7 @@ def run_cli(
             aws_region_name=aws_region_name,
             aws_endpoint_url=aws_endpoint_url,
         )
+        existing_times.add(target_ts)
         logger.info(
             "Wrote %s (%s) init_time=%s to %s (commit=%s, bytes=%d)",
             package_name,

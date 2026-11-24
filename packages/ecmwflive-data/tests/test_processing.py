@@ -190,6 +190,35 @@ class TestProcessing(unittest.TestCase):
                 )
             self.assertFalse(out_path.exists())
 
+    def test_cli_fetch_lists_s3_once_and_concatenates_in_order(self):
+        import io
+
+        now = dt.datetime.now(dt.UTC)
+        t = dt.datetime(now.year, 4, 8, 0, 0, tzinfo=dt.UTC)
+        chunk_a = b"GRIB" + b"A" * 60_000 + b"7777"
+        chunk_b = b"GRIB" + b"B" * 60_000 + b"7777"
+
+        with (
+            patch.dict(os.environ, {"ECMWF_REALTIME_S3_BUCKET": "test-bucket"}, clear=False),
+            patch("s3fs.S3FileSystem") as mock_fs_cls,
+            patch("ecmwflive_data.cli.process_ecmwf_live_validated") as mock_proc,
+        ):
+            mock_fs = mock_fs_cls.return_value
+            mock_fs.ls.return_value = [
+                "test-bucket/ecmwf/A2D04080000040800001",
+                "test-bucket/ecmwf/A2D04080000041500001",
+            ]
+            mock_fs.open.side_effect = lambda p, _m: (
+                io.BytesIO(chunk_a) if "040800001" in p else io.BytesIO(chunk_b)
+            )
+            seen_bytes: list[bytes] = []
+            mock_proc.side_effect = lambda grib_path, **kw: (
+                seen_bytes.append(grib_path.read_bytes()) or xr.Dataset()
+            )
+            PRODUCTS["hres_west_europe"].fetch(t)
+            self.assertEqual(mock_fs.ls.call_count, 1)
+            self.assertEqual(seen_bytes, [chunk_a + chunk_b])
+
 
 if __name__ == "__main__":
     unittest.main()

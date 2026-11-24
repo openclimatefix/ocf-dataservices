@@ -253,21 +253,11 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
             )
 
     def test_mars_hres_schema_matches_ecmwf_live_schema(self):
-        live_schema = EcmwfLiveSchema.to_schema()
-        mars_schema = MarsEcmwfHresSchema.to_schema()
-        self.assertEqual(MarsEcmwfHresSchema.dims(), EcmwfLiveSchema.dims())
-        self.assertEqual(MarsEcmwfHresSchema._chunks, EcmwfLiveSchema._chunks)
-        self.assertEqual(MarsEcmwfHresSchema._shards, EcmwfLiveSchema._shards)
-        self.assertEqual(set((mars_schema.coords or {}).keys()), set((live_schema.coords or {}).keys()))
-        self.assertEqual(
-            set((mars_schema.data_vars or {}).keys()),
-            set((live_schema.data_vars or {}).keys()),
-        )
+        self.assertIs(MarsEcmwfHresSchema, EcmwfLiveSchema)
 
     def test_docker_compose_dagster_yaml_and_mars_poll_url_retention(self):
-        import os
         from pathlib import Path
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         import yaml
         from dagster._core.instance.config import dagster_instance_config
@@ -277,6 +267,11 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
 
         repo_root = Path(__file__).resolve().parent.parent
         compose = yaml.safe_load((repo_root / "docker-compose.yaml").read_text())
+        for svc_name in ("dagster-webserver", "dagster-daemon"):
+            self.assertNotIn(
+                "dagster-local-vol:/opt/dagster/home/storage",
+                compose["services"][svc_name]["volumes"],
+            )
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / "dagster.yaml").write_text(compose["configs"]["dagster.yaml"]["content"])
             cfg, _ = dagster_instance_config(tmp)
@@ -288,6 +283,7 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
             )
 
             l0_io = MagicMock()
+            l0_io.base_path = tmp
             l0_io.existing_partition.return_value = None
             mars_res = MagicMock()
             client = mars_res.get_client.return_value
@@ -301,30 +297,28 @@ class TestXarrayIcechunkIOManagerStats(unittest.TestCase):
             url_file.parent.mkdir(parents=True, exist_ok=True)
             url_file.write_text("https://api.ecmwf.int/v1/services/mars/requests/job-1")
 
-            with patch.dict(os.environ, {"L0_ROOT_PATH": tmp}, clear=False):
-                # Transient network error preserves the .url file so retry does not leak a job
-                client.status.side_effect = ConnectionError("reset")
-                with (
-                    dg.build_asset_context(
-                        partition_key="2024-04-01T00:00",
-                        resources={"l0_io_manager": l0_io, "mars_client": mars_res},
-                    ) as ctx1,
-                    self.assertRaises(dg.RetryRequested),
-                ):
-                    l0_mars_ecmwf_hres_west_europe_v1(ctx1)
-                self.assertTrue(url_file.exists())
+            # Uses l0_io_manager.base_path directly without needing L0_ROOT_PATH in os.environ
+            client.status.side_effect = ConnectionError("reset")
+            with (
+                dg.build_asset_context(
+                    partition_key="2024-04-01T00:00",
+                    resources={"l0_io_manager": l0_io, "mars_client": mars_res},
+                ) as ctx1,
+                self.assertRaises(dg.RetryRequested),
+            ):
+                l0_mars_ecmwf_hres_west_europe_v1(ctx1)
+            self.assertTrue(url_file.exists())
 
-                # Expired 404 job resets the .url file cleanly
-                client.status.side_effect = APIException("HTTP Error 404: not found")
-                with (
-                    dg.build_asset_context(
-                        partition_key="2024-04-01T00:00",
-                        resources={"l0_io_manager": l0_io, "mars_client": mars_res},
-                    ) as ctx2,
-                    self.assertRaises(dg.RetryRequested),
-                ):
-                    l0_mars_ecmwf_hres_west_europe_v1(ctx2)
-                self.assertFalse(url_file.exists())
+            client.status.side_effect = APIException("HTTP Error 404: not found")
+            with (
+                dg.build_asset_context(
+                    partition_key="2024-04-01T00:00",
+                    resources={"l0_io_manager": l0_io, "mars_client": mars_res},
+                ) as ctx2,
+                self.assertRaises(dg.RetryRequested),
+            ):
+                l0_mars_ecmwf_hres_west_europe_v1(ctx2)
+            self.assertFalse(url_file.exists())
 
 
 if __name__ == "__main__":

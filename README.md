@@ -150,7 +150,7 @@ To deploy on a host:
 
 1. Copy `docker-compose.yaml` to `/etc/dagster/docker-compose.yaml`.
 2. Create `/etc/dagster/.env` with required environment variables (`L0_ROOT_PATH`, `L1_ROOT_PATH`,
-   `L2_ROOT_PATH`, `ECMWF_API_KEY`, `ECMWF_API_EMAIL`, `ECMWF_API_URL`, `CEDA_USER`, `CEDA_PASS`,
+   `ECMWF_API_KEY`, `ECMWF_API_EMAIL`, `ECMWF_API_URL`, `CEDA_USER`, `CEDA_PASS`,
    `ECMWF_REALTIME_S3_BUCKET`, `ECMWF_REALTIME_S3_ACCESS_KEY`, `ECMWF_REALTIME_S3_ACCESS_SECRET`,
    `METOFFICE_API_KEY`).
 3. Start the stack with `docker compose -f /etc/dagster/docker-compose.yaml up -d`.

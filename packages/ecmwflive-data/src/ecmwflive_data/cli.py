@@ -27,6 +27,7 @@ def _make_fetcher(
         region_name = os.getenv("ECMWF_REALTIME_S3_REGION", "eu-west-1")
         prefix = os.getenv("ECMWF_REALTIME_DISSEMINATION_FILE_PREFIX", "A2")
 
+        listed_files: list[str] = []
         completed = get_completed_init_times(
             bucket=bucket,
             access_key=access_key,
@@ -35,6 +36,7 @@ def _make_fetcher(
             region_name=region_name,
             prefix=prefix,
             last_processed=init_time - dt.timedelta(seconds=1),
+            files_out=listed_files,
         )
         if init_time not in completed:
             raise RuntimeError(
@@ -52,6 +54,7 @@ def _make_fetcher(
                 endpoint_url=endpoint_url,
                 region_name=region_name,
                 prefix=prefix,
+                files=listed_files or None,
             )
             if num_files == 0:
                 raise RuntimeError(

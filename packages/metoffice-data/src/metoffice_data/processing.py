@@ -1,12 +1,11 @@
 from collections.abc import Sequence
 from pathlib import Path
 
-import cfgrib
 import numpy as np
 import xarray as xr
 from schemas.dim_order import enforce_dim_order
 from schemas.nwp_coordinates import extract_grib_attr, utc_now_coord
-from schemas.nwp_variables import scale_to_percent
+from schemas.um_grib import normalize_um_variables, read_um_grib_datasets
 from schemas.validation import validates
 
 from .schema import (
@@ -40,75 +39,25 @@ def _assign_ukv_coords(ds: xr.Dataset) -> xr.Dataset:
 
 
 def _read_raw_grib(grib_path: Path | str) -> xr.Dataset:
-    """Read a concatenated MetOffice DataHub GRIB file into an `xarray.Dataset`.
-
-    Extracts parameters with `shortName='unknown'` individually by GRIB2 `parameterNumber` before
-    reading and merging the remaining variables.
-    """
-    read_keys = [
-        "generatingProcessIdentifier",
-        "localTablesVersion",
-        "latitudeOfFirstGridPointInDegrees",
-        "longitudeOfFirstGridPointInDegrees",
-    ]
+    """Read a concatenated MetOffice DataHub GRIB file into an `xarray.Dataset`."""
+    raw_datasets = read_um_grib_datasets(
+        grib_path,
+        read_keys=[
+            "generatingProcessIdentifier",
+            "localTablesVersion",
+            "latitudeOfFirstGridPointInDegrees",
+            "longitudeOfFirstGridPointInDegrees",
+        ],
+    )
     cleaned: list[xr.Dataset] = []
-
-    # Surface-adjusted wind parameters arrive as 'unknown' and must be disambiguated by the GRIB2
-    # parameterNumber. See https://datahub.metoffice.gov.uk/docs/glossary?sortOrder=GRIB2_CODE.
-    parameter_number_names: dict[int, str] = {
-        1: "tcc",
-        192: "u10",
-        193: "v10",
-        194: "wdir",
-        195: "si10",
-    }
-    for param_num, target_name in parameter_number_names.items():
-        try:
-            ds_params = cfgrib.open_datasets(
-                grib_path,
-                backend_kwargs={
-                    "indexpath": "",
-                    "read_keys": read_keys,
-                    "filter_by_keys": {"shortName": "unknown", "parameterNumber": param_num},
-                },
-            )
-            for ds_param in ds_params:
-                if "unknown" in ds_param.data_vars:
-                    ds_clean = ds_param.rename({"unknown": target_name}).drop_vars(
-                        ["number", "surface", "heightAboveGround", "atmosphere", "meanSea"],
-                        errors="ignore",
-                    )
-                    if "step" in ds_clean.coords and "step" not in ds_clean.dims:
-                        ds_clean = ds_clean.expand_dims("step")
-                    cleaned.append(ds_clean)
-        except Exception:  # noqa: S110, BLE001
-            pass  # Variable not present in this file
-
-    # Then read the rest of the variables.
-    try:
-        datasets = cfgrib.open_datasets(
-            grib_path,
-            backend_kwargs={"indexpath": "", "read_keys": read_keys},
+    for ds in raw_datasets:
+        ds_clean = ds.drop_vars(
+            ["number", "surface", "heightAboveGround", "atmosphere", "meanSea"],
+            errors="ignore",
         )
-    except Exception as e:
-        raise ValueError(f"Failed to open datasets from {grib_path}: {e}") from e
-
-    for ds in datasets:
-        # Already handled 'unknown', so any left over are unwanted.
-        if "unknown" in ds.data_vars:
-            ds = ds.drop_vars("unknown")
-
-        if len(ds.data_vars) > 0:
-            ds_clean = ds.drop_vars(
-                ["number", "surface", "heightAboveGround", "atmosphere", "meanSea"],
-                errors="ignore",
-            )
-            if "step" in ds_clean.coords and "step" not in ds_clean.dims:
-                ds_clean = ds_clean.expand_dims("step")
-            cleaned.append(ds_clean)
-
-    if not cleaned:
-        raise ValueError(f"No valid datasets found in {grib_path}")
+        if "step" in ds_clean.coords and "step" not in ds_clean.dims:
+            ds_clean = ds_clean.expand_dims("step")
+        cleaned.append(ds_clean)
 
     return xr.merge(cleaned, join="exact", compat="override", combine_attrs="override")
 
@@ -131,57 +80,7 @@ def _transform(ds: xr.Dataset, dims: Sequence[str]) -> xr.Dataset:
     if "init_time" in ds.coords and "init_time" not in ds.dims:
         ds = ds.expand_dims("init_time")
 
-    var_mapping: dict[str, str] = {
-        "tcc": "total_cloud_cover_atmosphere",
-        "hcc": "high_cloud_cover",
-        "mcc": "medium_cloud_cover",
-        "lcc": "low_cloud_cover",
-        "vis": "visibility",
-        "r": "relative_humidity_2m",
-        "r2": "relative_humidity_2m",
-        "prmsl": "pressure_reduced_to_mean_sea_level",
-        "msl": "pressure_reduced_to_mean_sea_level",
-        "sd": "snow_depth",
-        "dswrf": "downward_short_wave_radiation_flux_surface",
-        "sdswrf": "downward_short_wave_radiation_flux_surface",
-        "ssrd": "downward_short_wave_radiation_flux_surface",
-        "dlwrf": "downward_long_wave_radiation_flux_surface",
-        "sdlwrf": "downward_long_wave_radiation_flux_surface",
-        "strd": "downward_long_wave_radiation_flux_surface",
-        "t2m": "temperature_2m",
-        "t": "temperature_2m",
-        "u10": "wind_u_10m",
-        "10u": "wind_u_10m",
-        "v10": "wind_v_10m",
-        "10v": "wind_v_10m",
-        "si10": "wind_speed_10m",
-        "10si": "wind_speed_10m",
-        "wdir": "wind_direction_10m",
-        "10wdir": "wind_direction_10m",
-        "prate": "total_precipitation_rate",
-        "lsrr": "total_precipitation_rate",
-    }
-    rename_vars = {k: v for k, v in var_mapping.items() if k in ds.data_vars}
-    ds = ds.rename(rename_vars)
-
-    if "temperature_2m" in ds.data_vars:
-        ds["temperature_2m"] = ds["temperature_2m"] - 273.15
-
-    for cloud_var in (
-        "total_cloud_cover_atmosphere",
-        "high_cloud_cover",
-        "medium_cloud_cover",
-        "low_cloud_cover",
-    ):
-        if cloud_var in ds.data_vars:
-            ds[cloud_var] = scale_to_percent(ds[cloud_var])
-
-    if "wind_speed_10m" in ds.data_vars and "wind_direction_10m" in ds.data_vars:
-        if "wind_u_10m" not in ds.data_vars or "wind_v_10m" not in ds.data_vars:
-            rad = np.deg2rad(ds["wind_direction_10m"])
-            ds["wind_u_10m"] = -ds["wind_speed_10m"] * np.sin(rad)
-            ds["wind_v_10m"] = -ds["wind_speed_10m"] * np.cos(rad)
-        ds = ds.drop_vars(["wind_speed_10m", "wind_direction_10m"])
+    ds, schema_vars = normalize_um_variables(ds)
 
     if "x_laea" in dims:
         ds = _assign_ukv_coords(ds)
@@ -204,7 +103,6 @@ def _transform(ds: xr.Dataset, dims: Sequence[str]) -> xr.Dataset:
         meta_coords["grid_first_lon"] = ("init_time", np.full(n_init, first_lon, dtype=np.float64))
     ds = ds.assign_coords(meta_coords)
 
-    schema_vars = list(set(var_mapping.values()) - {"wind_speed_10m", "wind_direction_10m"})
     return enforce_dim_order(ds, dims, keep_vars=schema_vars)
 
 

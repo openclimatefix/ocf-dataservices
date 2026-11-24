@@ -100,10 +100,6 @@ class MarsRequest:
             number=number,
         )
 
-    def gen_filename(self) -> str:
-        """Generate a predictable filename for the requested data."""
-        return f"ecmwf_{self.stream}-{self.field_type}_{self.init_time:%Y%m%dT%H}.grib"
-
     def to_dict(self) -> dict[str, str]:
         mars_req: dict[str, str] = {
             "class": self.classification,

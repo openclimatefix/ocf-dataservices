@@ -52,7 +52,7 @@ def _poll_and_download_mars_l0(
     start_time = time.perf_counter()
 
     # Use a deterministic path for the .url file in shared L0 storage so retries can resume polling
-    l0_base_path = Path(os.environ.get("L0_ROOT_PATH", "/tmp/dagster_storage"))
+    l0_base_path = Path(context.resources.l0_io_manager.base_path or "/tmp/dagster_storage")
     url_dir = l0_base_path / "nwp" / asset_name / "_mars_urls"
     url_dir.mkdir(parents=True, exist_ok=True)
     url_file_path = url_dir / f"{partition_key.replace(':', '')}.url"

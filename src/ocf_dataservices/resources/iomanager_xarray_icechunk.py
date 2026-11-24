@@ -12,9 +12,6 @@ from storage.store import (
     open_icechunk_repo,
     write_to_icechunk,
 )
-from storage.store import (
-    existing_partition as store_existing_partition,
-)
 
 
 def _render_var_svg(
@@ -145,24 +142,6 @@ class XarrayIcechunkIOManager(dg.ConfigurableIOManager):
         return open_icechunk_repo(
             store_path=store_path,
             create_if_not_exists=create_if_not_exists,
-            aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_access_key,
-            aws_region_name=self.aws_region_name,
-            aws_endpoint_url=self.aws_endpoint_url,
-        )
-
-    def existing_partition(
-        self,
-        asset_key: dg.AssetKey,
-        append_dim: str,
-        partition_key: str,
-    ) -> xr.Dataset | None:
-        """Return the dataset slice for `partition_key` if it exists in the store, else `None`."""
-        store_path = self._get_store_path(asset_key)
-        return store_existing_partition(
-            store_path=store_path,
-            append_dim=append_dim,
-            partition_key=partition_key,
             aws_access_key_id=self.aws_access_key_id,
             aws_secret_access_key=self.aws_secret_access_key,
             aws_region_name=self.aws_region_name,

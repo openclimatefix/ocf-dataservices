@@ -97,21 +97,26 @@ class TestStorageAndCli(unittest.TestCase):
             )
             self.assertEqual(calls, [dt.datetime(2026, 4, 8, 0, 0, tzinfo=dt.UTC)])
 
-            # Range run spanning 00:00 and 06:00 -> 00:00 should be skipped before calling fetch
-            run_cli(
-                "demo-data",
-                products,
-                argv=[
-                    "--store-path",
-                    store_path,
-                    "--start",
-                    "2026-04-08T00:00",
-                    "--end",
-                    "2026-04-08T06:00",
-                    "--step-hours",
-                    "6",
-                ],
-            )
+            # Range run spanning 00:00 and 06:00 -> reads existing_partition_times once, skips 00:00
+            with patch(
+                "storage.cli.existing_partition_times",
+                wraps=__import__("storage.store", fromlist=["existing_partition_times"]).existing_partition_times,
+            ) as spy_existing:
+                run_cli(
+                    "demo-data",
+                    products,
+                    argv=[
+                        "--store-path",
+                        store_path,
+                        "--start",
+                        "2026-04-08T00:00",
+                        "--end",
+                        "2026-04-08T06:00",
+                        "--step-hours",
+                        "6",
+                    ],
+                )
+                self.assertEqual(spy_existing.call_count, 1)
             self.assertEqual(
                 calls,
                 [

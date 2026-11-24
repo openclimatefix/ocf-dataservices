@@ -28,7 +28,6 @@ dependencies = [
     "ecmwflive-data",
     "metoffice-data",
     "ceda-data",
-    "pandera>=0.32.1",
     "xarray>=2026.7.0",
 ]
 
@@ -77,9 +76,6 @@ directory_type = "project"
 
 [tool.dg.project]
 root_module = "ocf_dataservices"
-registry_modules = [
-    "ocf_dataservices.components.*",
-]
 
 # --- LINTING AND TYPING CONFIGURATION --- #
 
