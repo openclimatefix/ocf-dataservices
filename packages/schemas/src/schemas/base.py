@@ -35,7 +35,6 @@ class NwpDatasetSchema(pa.DatasetModel):
     _shards: ClassVar[dict[str, int]] = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
         if not cls._dims:
             raise ValueError(f"{cls.__name__} must declare a non-empty `_dims` tuple.")
         if not cls._chunks or tuple(cls._chunks.keys()) != tuple(cls._dims):
@@ -48,6 +47,12 @@ class NwpDatasetSchema(pa.DatasetModel):
                 f"{cls.__name__}._shards keys {list(cls._shards.keys())} must match `_dims` "
                 f"{list(cls._dims)}."
             )
+        cls.Config = type(
+            "Config",
+            (cls.Config,),
+            {"dims": tuple(cls._dims), "ordered_dims": True},
+        )
+        super().__init_subclass__(**kwargs)
 
     @classmethod
     def dims(cls) -> tuple[str, ...]:

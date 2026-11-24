@@ -295,6 +295,7 @@ version = "0.1.0"
 source = { editable = "packages/ceda-data" }
 dependencies = [
     { name = "cfgrib" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'" },
     { name = "pandera" },
     { name = "schemas" },
     { name = "storage" },
@@ -304,6 +305,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "cfgrib" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'" },
     { name = "pandera" },
     { name = "schemas", editable = "packages/schemas" },
     { name = "storage", editable = "packages/storage" },
@@ -920,11 +922,37 @@ wheels = [
 ]
 
 [[package]]
+name = "eccodeslib"
+version = "2.48.0.26"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "eckitlib" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/70/7a/27420329eb9fc11abaecd3a0ef375c1a709bfa24bf785b6d604484a8c7e7/eccodeslib-2.48.0.26-cp314-cp314-macosx_13_0_arm64.whl", hash = "sha256:27a3cc3d711dfa49968c61d7098e16f8ee939c1f3b2942892aebbffddd00c48d", size = 9097231, upload-time = "2026-07-17T13:58:56.049Z" },
+    { url = "https://files.pythonhosted.org/packages/34/5c/d07302687852b166be933ad99f7941845b16f90b2e1ca0ee08f7efe9b1fb/eccodeslib-2.48.0.26-cp314-cp314-macosx_13_0_x86_64.whl", hash = "sha256:bac6340aaecfd0cb21b8eae7b957f009c25912d468284c9821567edcaed950bc", size = 8911895, upload-time = "2026-07-17T13:21:52.004Z" },
+    { url = "https://files.pythonhosted.org/packages/f3/76/1b86868da7e9ffc563d54c4a8c874278ec686bbd551904a3c02b712ee3ad/eccodeslib-2.48.0.26-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:3e18afbb2e3bb51288845401f1d37f93f4927389a0276ab2c0496fd099595ee0", size = 9303576, upload-time = "2026-07-17T13:17:27.668Z" },
+    { url = "https://files.pythonhosted.org/packages/86/5f/21e45a69b772d36b8aa6ddd02414c813c8e9420e56e3ead5070d1e7121f5/eccodeslib-2.48.0.26-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:b8806183d2d633f761e67bb33e430b8d2b5b1324439c8aa5581ee2b1a244dc73", size = 9092982, upload-time = "2026-07-17T13:29:50.111Z" },
+]
+
+[[package]]
+name = "eckitlib"
+version = "2.1.1.26"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b2/38/da477636044d4cb8ec936a6359355b48cb674ce30e37f356ef2901a75ddf/eckitlib-2.1.1.26-cp314-cp314-macosx_13_0_arm64.whl", hash = "sha256:6f0fd96207c35cb4241ed5b88b7708eea7fe6d74068ad6dc48f2486859528496", size = 2486594, upload-time = "2026-07-17T13:59:01.301Z" },
+    { url = "https://files.pythonhosted.org/packages/30/dc/aaeb8766288c5ff9870757a17c3a08228cad24f4b57d95210af9e5390114/eckitlib-2.1.1.26-cp314-cp314-macosx_13_0_x86_64.whl", hash = "sha256:3c4ac9cd84804ed67f09ff59792e551d8f91fb7a720657c0879c230d208ce861", size = 2623446, upload-time = "2026-07-17T13:21:57.204Z" },
+    { url = "https://files.pythonhosted.org/packages/47/7d/43da4ab8697bf261a19e30138907aeb4e5802f23241a42da63d603ec1cfa/eckitlib-2.1.1.26-cp314-cp314-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:7423149aa3742129f0929f85a8cc4bd637841ceb581d3eb9d564dc13e729e686", size = 7046375, upload-time = "2026-07-17T13:17:31.643Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/61/1145f9a7d335a7836e8713917d1b7cdb9c58307f064343ee4ce8bee7a8c6/eckitlib-2.1.1.26-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:0e5c197940585c2c3cac6f7098830b1e6e8fda2a810977b1ede4f5677c8ea5a7", size = 7173537, upload-time = "2026-07-17T13:29:56.798Z" },
+]
+
+[[package]]
 name = "ecmwflive-data"
 version = "0.1.0"
 source = { editable = "packages/ecmwflive-data" }
 dependencies = [
     { name = "cfgrib" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'" },
     { name = "pandera" },
     { name = "s3fs" },
     { name = "schemas" },
@@ -935,6 +963,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "cfgrib" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'" },
     { name = "pandera" },
     { name = "s3fs" },
     { name = "schemas", editable = "packages/schemas" },
@@ -948,6 +977,7 @@ version = "0.1.0"
 source = { editable = "packages/ecmwfmars-data" }
 dependencies = [
     { name = "cfgrib" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'" },
     { name = "pandera", extra = ["xarray"] },
     { name = "schemas" },
     { name = "storage" },
@@ -957,6 +987,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "cfgrib", specifier = ">=0.9.15" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'" },
     { name = "pandera", extras = ["xarray"], specifier = ">=0.32.1" },
     { name = "schemas", editable = "packages/schemas" },
     { name = "storage", editable = "packages/storage" },
@@ -1768,6 +1799,7 @@ version = "0.1.0"
 source = { editable = "packages/metoffice-data" }
 dependencies = [
     { name = "cfgrib" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'" },
     { name = "pandera" },
     { name = "schemas" },
     { name = "storage" },
@@ -1777,6 +1809,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "cfgrib" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'" },
     { name = "pandera" },
     { name = "schemas", editable = "packages/schemas" },
     { name = "storage", editable = "packages/storage" },

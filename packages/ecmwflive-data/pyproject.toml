@@ -11,6 +11,7 @@ dependencies = [
     "schemas",
     "storage",
     "cfgrib",
+    "eccodeslib; sys_platform != 'win32'",
 ]
 
 [project.scripts]
